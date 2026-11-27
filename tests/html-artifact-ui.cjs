@@ -1,8 +1,14 @@
 'use strict';
 // Offline renderer/DOM regressions. These do not qualify Electron's sandbox,
 // network policy or pixel layout; the desktop fixture provides that evidence.
-const assert = require('node:assert/strict');
-const { test } = require('node:test');
+const nativeAssert = require('node:assert/strict');
+const { test, after } = require('node:test');
+let assertionCount = 0;
+const assert = new Proxy(nativeAssert, { get(target, key) {
+  const value = target[key];
+  return typeof value === 'function' ? (...args) => { assertionCount++; return value(...args); } : value;
+} });
+after(() => console.log(`Artifact UI assertions: ${assertionCount}; skips are not included`));
 const { JSDOM } = require('jsdom');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -35,6 +41,11 @@ function surface(t, module = 'html-artifact-viewer.js', options = {}) {
   const w = dom.window, d = w.document;
   const registered = [], released = [], reads = [], cleanups = [];
   w.TextEncoder = TextEncoder;
+  // State-machine shim only, NOT a native modal/focus or rendering proof.
+  if (options.dialog !== false) {
+    w.HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+    w.HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
+  }
   w.fetch = async (url, init) => {
     const body = init?.body ? JSON.parse(init.body) : null;
     if (url === '/api/html-artifacts/read') {
@@ -66,7 +77,7 @@ function mounted(s, ref = reference(), options = {}) {
 function message(s, frame, type, extra = {}, overrides = {}) {
   const nonce = frame.srcdoc.match(/"nonce":"([a-f0-9]+)"/)?.[1];
   s.w.dispatchEvent(new s.w.MessageEvent('message', { source: frame.contentWindow, origin: 'null',
-    data: { schemaVersion: 1, id: frame.parentElement?.dataset.artifactId, nonce, type, ...extra }, ...overrides }));
+    data: { schemaVersion: 1, id: frame.closest('.html-artifact')?.dataset.artifactId, nonce, type, ...extra }, ...overrides }));
 }
 
 test('closed history projections make sibling artifact boundaries without executing Markdown or retaining HTML', async () => {
@@ -153,7 +164,7 @@ test('postMessage accepts only the exact opaque frame, protocol, artifact and fr
   message(s, frame, 'resize', { height: Infinity }); assert.equal(frame.style.height, '320px');
   message(s, frame, 'resize', { height: 999999 }); await new Promise(resolve => s.w.requestAnimationFrame(resolve));
   assert.equal(frame.style.height, '4096px');
-  message(s, frame, 'resize', { height: -5 }); await new Promise(resolve => s.w.requestAnimationFrame(resolve));
+  message(s, frame, 'resize', { height: -5 }); await new Promise(resolve => setTimeout(resolve, 135));
   assert.equal(frame.style.height, '80px');
   message(s, frame, 'open-external', { url: 'https://not-used.invalid' }); assert.equal(viewer.node.dataset.state, 'ready');
 });
@@ -260,6 +271,106 @@ test('Classic large history chunk cancellation never mounts or reads its later a
   await new Promise(resolve => setTimeout(resolve, 40));
   assert.equal(s.d.querySelectorAll('.html-artifact').length, 0); assert.equal(s.reads.length, 0);
   assert.match(s.d.querySelector('.thread').textContent, /new thread/); s.w.clearThread();
+});
+
+test('inline dialog preserves the frame and registration through full screen and zoom modes', async t => {
+  const s = surface(t), viewer = mounted(s); await tick(); await tick();
+  const frame = viewer.node.querySelector('iframe'), source = frame.srcdoc;
+  const expand = viewer.node.querySelector('.html-artifact-expand');
+  message(s, frame, 'ready'); expand.focus(); expand.click();
+  const dialog = viewer.node.querySelector('dialog');
+  assert.equal(dialog.open, true); assert.equal(dialog.getAttribute('aria-modal'), 'true');
+  assert.equal(expand.getAttribute('aria-expanded'), 'true');
+  assert.equal(s.d.activeElement.getAttribute('aria-label'), '关闭全屏');
+  dialog.querySelector('[aria-label="放大"]').click();
+  assert.equal(frame.style.transform, 'scale(1.25)'); assert.equal(dialog.dataset.zoomMode, 'transform');
+  dialog.querySelector('[aria-label="重置为 100%"]').click();
+  assert.equal(frame.style.transform, 'none'); assert.equal(dialog.dataset.zoomMode, 'transform');
+  [...dialog.querySelectorAll('button')].find(node => node.textContent === '适应宽度').click();
+  assert.equal(dialog.dataset.zoomMode, 'responsive');
+  message(s, frame, 'escape');
+  assert.equal(dialog.open, false); assert.equal(s.d.activeElement, expand);
+  assert.equal(viewer.node.querySelector('iframe'), frame); assert.equal(frame.srcdoc, source);
+  assert.equal(s.registered.length, 1); assert.equal(s.released.length, 0); assert.equal(s.reads.length, 1);
+  viewer.dispose(); assert.equal(s.released.length, 1);
+});
+
+test('artifact dialogs are independent, close their prior sibling, and dispose expanded resources once', async t => {
+  const a = reference(), b = reference('two'), s = surface(t, undefined, { artifacts: [a, b] });
+  const one = mounted(s, a), two = mounted(s, b); await tick(); await tick();
+  const first = one.node.querySelector('iframe'), second = two.node.querySelector('iframe');
+  message(s, first, 'ready'); message(s, second, 'ready');
+  one.node.querySelector('.html-artifact-expand').click();
+  two.node.querySelector('.html-artifact-expand').click();
+  assert.equal(one.node.querySelector('dialog').open, false);
+  assert.equal(two.node.querySelector('dialog').open, true);
+  message(s, first, 'escape'); assert.equal(two.node.querySelector('dialog').open, true);
+  message(s, second, 'resize', { height: 4096, naturalHeight: 9000, naturalWidth: 728, capped: true });
+  await new Promise(resolve => setTimeout(resolve, 135));
+  assert.equal(second.style.height, '9000px'); assert.equal(two.node.dataset.capped, 'true');
+  two.dispose(); two.dispose();
+  assert.equal(two.node.querySelector('dialog').open, false); assert.equal(two.node.querySelector('iframe'), null);
+  assert.equal(s.released.length, 1); one.dispose(); assert.equal(s.released.length, 2);
+});
+
+test('a browser without native modal support retains the inline artifact and disables expansion', async t => {
+  const s = surface(t, undefined, { dialog: false }), viewer = mounted(s); await tick(); await tick();
+  const frame = viewer.node.querySelector('iframe'); message(s, frame, 'ready');
+  const expand = viewer.node.querySelector('.html-artifact-expand');
+  assert.equal(expand.disabled, true); expand.click();
+  assert.equal(viewer.node.querySelector('dialog').open, false); assert.equal(viewer.node.dataset.state, 'ready');
+});
+
+test('a valid link uses the host confirmation, not the frame nonce, before the existing web bridge', async t => {
+  const s = surface(t), viewer = mounted(s), opened = []; await tick(); await tick();
+  const frame = viewer.node.querySelector('iframe'); message(s, frame, 'ready');
+  s.w.piGuiDesktop.openWebUrl = async href => { opened.push(href); return { ok: true }; };
+  message(s, frame, 'link', { href: 'https://example.invalid/report' });
+  assert.equal(s.d.querySelector('#confirmLayer').hidden, true); assert.equal(opened.length, 0);
+  Object.defineProperty(s.w.navigator, 'userActivation', { value: { isActive: true } });
+  viewer.node.querySelector('.html-artifact-expand').click(); frame.focus();
+  message(s, frame, 'link', { href: 'https://example.invalid/report' }); await tick();
+  assert.equal(viewer.node.querySelector('dialog').open, false);
+  assert.equal(s.d.querySelector('#confirmLayer').hidden, false); assert.equal(opened.length, 0);
+  s.d.querySelector('#confirmCard .btn.primary').click(); await tick();
+  assert.deepEqual(opened, ['https://example.invalid/report']); assert.equal(s.reads.length, 1);
+});
+
+test('disposing an artifact cancels its own pending link confirmation and never opens a late URL', async t => {
+  const s = surface(t), viewer = mounted(s), opened = []; await tick(); await tick();
+  const frame = viewer.node.querySelector('iframe'); message(s, frame, 'ready');
+  Object.defineProperty(s.w.navigator, 'userActivation', { value: { isActive: true } });
+  s.w.piGuiDesktop.openWebUrl = async href => { opened.push(href); return { ok: true }; };
+  frame.focus(); message(s, frame, 'link', { href: 'https://example.invalid/report' }); await tick();
+  assert.equal(s.d.querySelector('#confirmLayer').hidden, false);
+  viewer.dispose(); await tick();
+  assert.equal(s.d.querySelector('#confirmLayer').hidden, true); assert.equal(opened.length, 0);
+});
+
+test('bounded raster images open a separate host image element and clear on dispose', async t => {
+  const s = surface(t), viewer = mounted(s); await tick(); await tick();
+  const frame = viewer.node.querySelector('iframe'); message(s, frame, 'ready');
+  const src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJ1sAAAAASUVORK5CYII=';
+  const raster = s.w.artifactRaster(src, s.w);
+  assert.equal(raster.width, 1); assert.equal(raster.height, 1);
+  assert.equal(s.w.artifactRaster('data:image/svg+xml;base64,PHN2Zy8+', s.w), null);
+  Object.defineProperty(s.w.navigator, 'userActivation', { value: { isActive: true } });
+  frame.focus(); message(s, frame, 'image', { src, alt: '1px fixture' });
+  const dialog = s.d.querySelector('.html-artifact-image-dialog');
+  assert.equal(dialog.open, true); assert.equal(dialog.querySelector('img').alt, '1px fixture');
+  assert.equal(dialog.querySelector('img').getAttribute('src'), src);
+  assert.equal(viewer.node.querySelector('iframe'), frame);
+  viewer.dispose(); assert.equal(s.d.querySelector('.html-artifact-image-dialog'), null);
+});
+
+test('expanded sizes stay bounded and return to the v1 capped inline viewport', async t => {
+  const s = surface(t), viewer = mounted(s); await tick(); await tick();
+  const frame = viewer.node.querySelector('iframe'); message(s, frame, 'ready');
+  message(s, frame, 'resize', { height: 4096, naturalHeight: 1000000, naturalWidth: 728, capped: true });
+  await new Promise(resolve => setTimeout(resolve, 135));
+  assert.equal(frame.style.height, '4096px');
+  viewer.node.querySelector('.html-artifact-expand').click(); assert.equal(frame.style.height, '65536px');
+  viewer.node.querySelector('[aria-label="关闭全屏"]').click(); assert.equal(frame.style.height, '4096px');
 });
 
 test('Runtime production renderer wires multiple live artifacts, isolates sessions, destroys on leave and reopens by scoped read', async t => {
