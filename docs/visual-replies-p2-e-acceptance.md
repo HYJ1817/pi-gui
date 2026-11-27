@@ -1,7 +1,8 @@
 # Visual Replies P2 · E：规范测试链与 CI 验收
 
 日期：2026-11-27。总体逐项覆盖与真实样例矩阵见 [覆盖索引](visual-replies-p2-coverage.md)。
-本报告只证明 E 的测试基建，不代表 A–D 已集成、真实 Visual Replies 已验收或允许发布。
+第 1–7 节保留 E 原交付的历史身份与证据；第 8 节追加 E2 在 `a2cdaeb0` 集成状态上的登记与定向结果。
+本报告只证明所列测试基建与离线范围，不代表 A–D 全部集成、真实 Visual Replies 已验收或允许发布。
 
 ## 1. 身份、范围与勘察
 
@@ -166,7 +167,7 @@ E 已读取该精确提交 diff 核对改动，但没有把父运行冒充 E 运
 
 1. A–D 仍各自拥有产品和专属测试；E 不修改它们。新增离线 Artifact 套件使用 `tests/html-artifact-*.cjs`；桌面 `*-electron.cjs` 保持独立。真实 Pi/模型/打包入口必须另命名、另确认门控，不能因扫描器要求而强塞入离线链。
 2. 文件实际集成后，仅在 `package.json` 既有 `test:html-artifacts` 追加 `node tests/<文件>.cjs` 或 `node --test tests/<文件>.cjs`；不新增 workflow 清单、第二份执行计划或复制 `npm test` 列表。
-3. D 已通知的 `html-artifact-layout.cjs`、`html-artifact-frame.cjs`、`html-artifact-reading.cjs` 在本次 E worktree 尚不存在，**本次未注册、未运行**。这些命名在集成后归 ui。C 的既有 UI 入口保持。
+3. D 已通知的 `html-artifact-layout.cjs`、`html-artifact-frame.cjs`、`html-artifact-reading.cjs` 在原 E 交付时尚不存在，**原 E 未注册、未运行**。E2 集成后的登记与实测见第 8 节；三者归 ui。C 的既有 UI 入口保持。
 4. `ci-html-artifacts` 会发现新增离线文件并要求在 Artifact alias 和完整链各恰好出现一次；缺注册/重复注册均失败。`--validate` 会拒绝尚不存在的文件，包括 `node --test` 的第二个及以后文件。
 5. 集成者运行 `node scripts/run-test-group.mjs --validate --list`、`npm run test:html-artifacts`、`npm run test:ci`，重新记录真实数字、skip、新计划摘要和必要回归；不能沿用本线 358 叶数字为集成后的结果。
 6. 完整 canonical 由当前 PR CI 覆盖最终代码状态；独立功能/安全审查由父任务另派新上下文。本线自查不是独立通过。
@@ -178,3 +179,92 @@ E 已读取该精确提交 diff 核对改动，但没有把父运行冒充 E 运
 - 开发：E 规范链/守卫/入口已完成；D 等未来注册仍需集成复检。
 - 代码验收：待当前 PR canonical、独立功能/安全审查及真实边界证据；不标整体通过。
 - 合并/发布：未获本线授权；本线不 push、不创建 PR、不 merge、不 tag、不 release。
+
+## 8. E2：首批集成后的登记与定向结果
+
+### 8.1 代码身份与范围
+
+- 日期：2026-11-27；before HEAD `a2cdaeb01ad50ed4cad5f82f08361d5f707546a4`，分支 `feat/visual-replies-p2`。
+- 仅使用 `C:/pi-GUI/.claude/worktrees/visual-replies-p2`。起始已有父任务未提交的 `docs/visual-replies-p2-plan.md`；不编辑、不暂存、不提交它。
+- 该 HEAD 已包含 D 的高度/可见性/阅读实现和三套回归、C 首批宿主交互、A 首批六类良性样例。E 原提交映射为 `b4792be4` / `2152728b`；均已读取核对。
+- E2 只修改 `package.json`、`tests/ci-html-artifacts.cjs` 和本报告/覆盖索引。实际 guard 名称不是任务简称中的 `html-artifact-ci.cjs`；不新建第二个 guard。
+- 证据绑定上述 HEAD 加 E2 的 package/guard diff；四个新套件及产品文件未由 E2 修改。交付 SHA 为提交信息“测试(可视化)：登记首批 P2 集成回归并记录未验证边界”的提交，可用 `git log -1 --format=%H --grep='登记首批 P2 集成回归并记录未验证边界'` 定位；最终消息另给准确 SHA。
+- Node `v24.22.1`、npm `11.19.1`、win32 x64、Windows `10.0.26200`；仅以 `NODE_PATH=C:/pi-GUI/node_modules` 读取现有依赖，未安装、下载、调用真实 Pi 或模型。按固定集成 SHA 和本批离线授权执行，未 fetch 或查询远端 Release/CI；当前 PR 完整 CI 未运行的状态不变。
+
+### 8.2 唯一 canonical 链与增量守卫
+
+复用既有 npm 生命周期、递归 alias 和计划器；只在 `test:html-artifacts` 原 8 叶之后追加：
+
+| 新叶命令 | 分组 | 实际测试数 / 证据边界 |
+| --- | --- | --- |
+| `node --test tests/html-artifact-layout.cjs` | ui | 12；确定性 clock/resize/可见性，非像素布局 |
+| `node --test tests/html-artifact-frame.cjs` | ui | 14；jsdom/受控几何/生产 bootstrap，非真实沙箱 |
+| `node --test tests/html-artifact-reading.cjs` | ui | 12；阅读锚点/局部滚动，非原生跨 iframe 滚轮 |
+| `node --test tests/visual-replies-normal-samples.cjs` | core | 7；六类合成良性样例及交互，不是模型调用或真实 Electron |
+
+精确计划比较：**358 → 362 叶，原 358 叶全部保留、相对顺序不变、删除 0、重复 0、旧叶换组 0**。
+Artifact alias 为 8 → 12 叶。包括 backend/process、旧 UI/security、driver/safety 在内的原 8 叶命令逐字保留；其他 alias、`test`、`pretest`、`test:ci` 未修改。
+五组为 core **280** / ui **28** / security **28** / native **4** / faults **22**。
+计划摘要：`509f720388b3d5b3a2b4bfa61db5540995ae38eaa62e240a23505381c025fa0a`。
+`node scripts/run-test-group.mjs --validate --list` exit 0 只证明计划覆盖，不代表 362 叶已执行。
+
+Guard 保留原 9 项，增加 normal-samples 漏注册/重复注册拒绝、四个新 Node test runner 入口、fixture 非独立套件三项，共 12 项。
+扫描只读顶层离线套件，normal-samples 纳入同一覆盖检查；不放宽 Electron、真实 Pi/模型、打包及危险 flags 边界。
+`tests/fixtures/html-artifact-d-clock.cjs` 和 `tests/fixtures/visual-replies-normal-samples.cjs` 均不注册。
+没有改 CI workflow、计划器、产品实现、其他人的测试或断言，也没有把失败改成 skip。
+
+### 8.3 实测命令、准确数量与首次失败
+
+全部在上述工作树执行，环境 `NODE_PATH=C:/pi-GUI/node_modules`。日志根目录为本次唯一 TEMP：
+`C:/Users/21022/AppData/Local/Temp/pi-gui-p2-e2-2GMMhp/`。
+`environment.json` 记录起始 HEAD/dirty 状态；`after-registration-environment.json` 另记 package、guard 和四套测试的 SHA-256。
+每条直接命令有同名 `.json` 退出码/耗时记录，完整输出在下表 `.log`；它们不是永久存档承诺。
+
+| 实际命令（均为定向运行） | pass / fail / skip | exit / 日志 |
+| --- | --- | --- |
+| `node --test tests/ci-html-artifacts.cjs`，登记前 | 8 / 1 / 0 | 1；`before-guard.log` |
+| `node --test tests/html-artifact-layout.cjs` | 12 / 0 / 0 | 0；`layout.log` |
+| `node --test tests/html-artifact-frame.cjs` | 14 / 0 / 0 | 0；`frame.log` |
+| `node --test tests/html-artifact-reading.cjs` | 12 / 0 / 0 | 0；`reading.log` |
+| `node --test tests/visual-replies-normal-samples.cjs` | 7 / 0 / 0 | 0；`normal.log` |
+| `node --test tests/ci-html-artifacts.cjs`，登记后及 `test:ci` 内复跑 | 各 12 / 0 / 0 | 各 0；`after-guard.log` / `test-ci.log` |
+| `node scripts/run-test-group.mjs --validate --list` | 362 叶精确覆盖；不是测试执行数 | 0；`validate.log`、`plan-comparison.json` |
+| `node tests/html-artifact-model.cjs` | 8 / 0 / 0 | 0；`model.log` |
+| `node --test tests/html-artifact-ui.cjs` | **10 / 3 / 0** | **1**；`old-ui.log`，保留失败 |
+| `node tests/html-artifact-store.cjs` | **135/135 场景，529 assertions；另 skip 3** | 0；`store.log` |
+| `node tests/html-artifact-backend.cjs` | 38 / 0 / 0 Node tests，含父 test | 0；`backend.log` |
+| `node tests/html-artifact-process.cjs` | 8 / 0 / 0 Node tests，含父 test；fake Pi | 0；`process.log` |
+| `npm run test:ci` | 10 叶命令全部 exit 0；未输出完整总断言数，不编造 | 0；`test-ci.log`，42989 ms |
+| `node tests/file-size-report.cjs` | 11/11 场景，未报告 skip | 0；`file-size-report.log` |
+
+D 三套为 **38/38**，加 normal-samples 为 **45/45**，fail/skip 均 0；重复执行 guard 不重复计入新增测试数。
+四套先于登记直接运行一次，登记完成后又从实际 alias 展开的四条新叶逐条复跑，结果均不变；最终复跑日志为 `registered-html-artifact-{layout,frame,reading}.log` 和 `registered-visual-replies-normal-samples.log`，不重复累计为 90 个测试。
+Store 的 3 个 skip 仍是 Windows 文件 symlink 权限（document.html / reference.json / .pending），不计入 135 的分子分母。
+代表输出仍为 UTF-8 HTML 51 bytes、物理快照 474 bytes、digest `ca917c3438c3e09ad3c87a1c74bd611a36d3aaae3f67885dbee8c36596cc5911`。
+Process duration 为 12569.2947 ms；不是 B 的性能优化前后对照。
+自查 `git diff --check` exit 0；两篇拥有文档的 4 个本地链接、其中 2 个标题锚点，missing 0。
+Guard 原 9 个 test 名称和原 47 条源码断言行均保留（当前 12 个 test、56 条断言行）；源码行计数不是执行断言总数，证据在 `self-check.json`。
+
+`test:ci` 具体输出：ci-test-plan 362 叶/5 组精确覆盖；ci-workflow readiness 5/5、gate 拒绝矩阵 15/15；
+ci-html-artifacts 12/12；ci-results 10/10；ci-summary 30/30；ci-history 21 assertions；ci-doc-scope 28/28；
+release-ci-proof 16/16；nsis-bootstrap 12/12。ci-electron-cache 与 ci-test-plan 未报告总断言数。
+下载、安装、GitHub API 和故意失败/取消均为这些测试自身的离线替身；没有执行网络下载或真实安装。
+Guard 内 `--live` 无授权子进程明确在 import/spawn 前 exit 2，只证明拒绝路径，不是模型或安全专项执行。
+
+首次失败保留：
+
+1. 登记前 guard 为 8 pass / 1 fail，首个断言为 `tests/html-artifact-frame.cjs must execute exactly once in the canonical chain`，实际 0、期望 1。只补登记/守卫后为 12/12。
+2. 旧 UI 在当前集成产品上为 10 pass / 3 fail，三处均是实际 `loading`、期望 `ready`：`tests/html-artifact-ui.cjs:131`、`:152`、`:197`；首个失败 test 从 `:116` 开始。C 的旧 UI 适配尚未交付，E2 不修改测试/产品、不改 skip，也不声称根因已修复。
+3. 记录中的工具参数 JSON 截断发生在命令/编辑执行前，未构成测试运行或部分写入；不是产品失败。
+
+### 8.4 本批登记集合、后续交接与未验证
+
+- 本批仅完成 **D layout/frame/reading + normal-samples** 四新套件登记及上述定向证据，不等候全部 A/B/C 才交付。
+- 待后续实际文件交付再登记：A1 新离线套件、B2 performance/lock/maintenance、B3 branches、C 新套件（如有）。不预注册不存在文件，不猜文件名；C 对既有 UI 的适配也待交付复跑。
+- **B2 勘察状态非已通过：** B2 已报告 maintenance/CLI 用 `confirmNativeWritersStopped` 作为删除资格是实际缺陷，正将 collect 收紧为 fail-closed / candidates-only，不依赖口述停写。本批 SHA 不包含这项后续收紧；候选扫描不是自动 GC 或容量回收已完成。旧 Store 135 场景/529 assertions/另 skip 3 只证明旧受控 fixture，不解除该缺陷。
+- A 正常沙箱安全首轮 28/29、about:blank 自导航断言失败且后续服务拒绝仍保留 failed/blocked。E2 未运行安全专项、不改 A 文件、不接替或绕过；也未运行纯离线 `html-artifact-security.cjs`。
+- 未完整执行 Artifact alias（旧 UI 已有失败，且本批不跑安全相关入口）；现 12 叶已登记不等于该 alias 已通过。
+- **完整 canonical：pending。** 用户预先选择当前 PR 完整 CI；本批未运行完整本地 `npm test`，当前 PR 完整 CI 尚未运行，未取得 run/attempt/head 或 merge SHA/gate 证明。不能用历史 355 叶 main CI、362 叶计划检查或本地 `test:ci` 代替。
+- 产品整体、真实普通交互/截图、真实 Pi、真实模型、正常沙箱、完整集成、重建/打包及独立功能/安全审查分别 pending；安全已有失败不能被“pending”覆盖。本线不改 public/server，不负责重建，不声称产物更新；最终集成、产物、推送由父任务负责。
+- 风险按 CI/test 输入对待；E2 自查不是独立复审。回滚为仅回退本 E2 提交，不动父 plan 或后续产品提交；无用户数据/schema 迁移。
+- 本批登记开发已完成；整体代码验收未通过、无合并/发布许可。不 push、不建 PR、不 merge、不发版。

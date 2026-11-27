@@ -12,7 +12,7 @@
     "test:final-remediation:electron": "node tests/final-remediation-electron.cjs",
     "test:primitives": "node tests/primitives.cjs && node tests/design-system-buttons.cjs && node tests/settings-acceptance.cjs && node tests/font-picker.cjs",
     "test:attachments": "node tests/attachments.cjs",
-    "test:html-artifacts": "node tests/html-artifact-model.cjs && node --test tests/html-artifact-ui.cjs && node tests/html-artifact-store.cjs && node tests/html-artifact-backend.cjs && node tests/html-artifact-process.cjs && node --test tests/html-artifact-security.cjs && node tests/visual-replies-electron.cjs --check-driver && node tests/visual-replies-electron.cjs --check-safety",
+    "test:html-artifacts": "node tests/html-artifact-model.cjs && node --test tests/html-artifact-ui.cjs && node tests/html-artifact-store.cjs && node tests/html-artifact-backend.cjs && node tests/html-artifact-process.cjs && node --test tests/html-artifact-security.cjs && node tests/visual-replies-electron.cjs --check-driver && node tests/visual-replies-electron.cjs --check-safety && node --test tests/html-artifact-layout.cjs && node --test tests/html-artifact-frame.cjs && node --test tests/html-artifact-reading.cjs && node --test tests/visual-replies-normal-samples.cjs",
     "test:html-artifacts:security:electron": "node tests/html-artifact-electron.cjs",
     "test:html-artifacts:electron": "node tests/visual-replies-electron.cjs --offline",
     "test:html-artifacts:live": "node tests/visual-replies-electron.cjs --live",

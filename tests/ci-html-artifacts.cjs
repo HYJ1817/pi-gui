@@ -11,7 +11,7 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 
 const workflowDir = path.join(root, '.github/workflows');
 const planner = import('../scripts/test-group-plan.mjs');
 const offlineFiles = directory => fs.readdirSync(directory)
-  .filter(name => /^html-artifact-.*\.cjs$/.test(name) && !/-electron\.cjs$/.test(name))
+  .filter(name => /^(?:html-artifact-.*|visual-replies-normal-samples)\.cjs$/.test(name) && !/-electron\.cjs$/.test(name))
   .map(name => 'tests/' + name).sort();
 
 function requireCoverage(files, leaves, filesForCommand) {
@@ -62,6 +62,47 @@ test('registration guard rejects a newly added offline suite until package.json 
   } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
 });
 
+test('normal sample regression is discovered and rejects missing or duplicate registration', async () => {
+  const { testFilesForCommand } = await planner;
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-html-normal-canonical-'));
+  try {
+    fs.writeFileSync(path.join(fixture, 'visual-replies-normal-samples.cjs'), '// synthetic offline suite\n');
+    fs.mkdirSync(path.join(fixture, 'fixtures'));
+    for (const name of ['html-artifact-d-clock.cjs', 'visual-replies-normal-samples.cjs']) {
+      fs.writeFileSync(path.join(fixture, 'fixtures', name), '// helper, not a suite\n');
+    }
+    const files = offlineFiles(fixture);
+    assert.deepEqual(files, ['tests/visual-replies-normal-samples.cjs']);
+    assert.throws(() => requireCoverage(files, [], testFilesForCommand), /must execute exactly once/);
+    const command = 'node --test tests/visual-replies-normal-samples.cjs';
+    requireCoverage(files, [command], testFilesForCommand);
+    assert.throws(() => requireCoverage(files, [command, command], testFilesForCommand), /must execute exactly once/);
+  } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
+});
+
+test('new D and normal node:test suites retain explicit --test entrypoints', async () => {
+  const { createTestGroupPlan, testFilesForCommand } = await planner;
+  const files = offlineFiles(path.join(root, 'tests')).filter(file =>
+    /tests\/(?:html-artifact-(?:layout|frame|reading)|visual-replies-normal-samples)\.cjs$/.test(file));
+  assert.equal(files.length, 4);
+  for (const leaves of [createTestGroupPlan({ root, packageJson }).leaves, (await artifactPlan()).leaves]) {
+    for (const file of files) {
+      const commands = leaves.filter(command => testFilesForCommand(command).includes(file));
+      assert.equal(commands.length, 1, `${file} must have one runner entry`);
+      assert.match(commands[0], /^node --test /, `${file} must use the Node test runner`);
+    }
+  }
+});
+
+test('clock and normal sample helpers never execute as standalone canonical suites', async () => {
+  const { createTestGroupPlan, testFilesForCommand } = await planner;
+  for (const leaves of [createTestGroupPlan({ root, packageJson }).leaves, (await artifactPlan()).leaves]) {
+    const files = leaves.flatMap(testFilesForCommand);
+    assert.ok(!files.includes('tests/fixtures/html-artifact-d-clock.cjs'));
+    assert.ok(!files.includes('tests/fixtures/visual-replies-normal-samples.cjs'));
+  }
+});
+
 test('Artifact UI/security/process boundaries get intentional groups, including node --test', async () => {
   const { classifyTestCommand } = await planner;
   for (const mode of ['node ', 'node --test ']) {
@@ -93,8 +134,10 @@ test('canonical contains offline driver checks but no desktop, live, contract or
     assert.doesNotMatch(command, /--(?:live|offline|preflight|contract|real-pi|packaged)\b/);
     assert.doesNotMatch(command, /(?:^|\s)tests\/html-artifact-\S*electron\.cjs\b/);
     assert.doesNotMatch(command, /PI_GUI_VISUAL_REPLIES_LIVE/);
-    if (command.includes('tests/visual-replies-')) {
+    if (command.includes('tests/visual-replies-electron.cjs')) {
       assert.match(command, /^node tests\/visual-replies-electron\.cjs --check-(?:driver|safety)$/);
+    } else if (command.includes('tests/visual-replies-')) {
+      assert.equal(command, 'node --test tests/visual-replies-normal-samples.cjs');
     }
   }
 });
