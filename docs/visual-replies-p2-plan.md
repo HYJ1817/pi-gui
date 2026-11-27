@@ -18,6 +18,47 @@
 5. 新上下文独立功能与安全审查，最多三轮收敛；阻断项不得隐瞒。
 6. 推送分支，最终报告逐项说明完成、未验证和阻塞；无批准不得合并/发版。
 
+## 阶段状态与阻断记录
+
+- 已核对准确基线 CI `45952490979`：push / attempt 1 / head SHA `dfdc1ddea060d8c369e5e0932d052655baa3d772`，五组、build 和最终 gate 成功。该证明只覆盖基线，不覆盖 P2。
+- D 的首个接口提交 `52900f2b310670f16566f9b69c6faa48bb669a06` 已集成为 `7b82599f`；仅代表最小消息、host 高度限流和可见性接口，不代表 D 已完成。
+- C 已重新取得 T3 main 源码 `d20571f9b9fa35da087e916713f6bac05ac9d1f4`，具体对照与限制由 C 报告，不从旧 P1 参考继承结论。
+- A 使用同版本同摘要的离线 Electron 副本，在正常沙箱执行首轮实际安全测试，报告为 **28/29，completed=false、failed=1**。`self-navigation-denied-blank` 未通过；报告位于 `C:/Users/21022/AppData/Local/Temp/pi-html-artifact-security-ymlgeK/report.json`。这不是安全验收通过，也不是最终 P2 产物证据。
+- A 后续运行被模型服务明确拒绝：`API Error: Request blocked by cyber policy.`。该安全执行线已停止；不得通过换模型、代理或改写同一测试规避拒绝。未完成的隔离问题和安全矩阵保留阻断状态。
+- A1 另行负责未被阻断的普通功能：真实 Pi 无模型契约、带显式授权门控的 live 驱动、六类良性样例及普通交互验证。**不接替 A 的恶意 HTML、逃逸或外传研究**；A1 结果不能算安全专项通过。
+- E 测试基建与证据文档已集成（`b4792be4`、`2152728b`）；原 355 个 canonical 叶命令全部保留，新增 backend/process/CI 注册守卫后为 358 叶。主 Agent 核读基线结构化摘要，确认 355/355、失败/跳过/未完成均为 0；这仍只证明 P1 基线。
+- 集成检查补正手动工作流的临时目录初始化顺序（`99d8ac82`）：新增断言修复前 8/9、修复后 9/9，skip 0、exit 0。仅证明配置守卫，不证明实际沙箱安全。D 等新套件到齐后仍需补注册与集成回归。
+- 未执行的工作流、真实模型、最终 canonical 和正式构建均不得填为通过。新增 workflow_dispatch 文件尚未进入默认分支时，不能声称可以在当前 PR 中已完成 dispatch。
+
+## 续接记录（2026-11-27）
+
+- 原父会话因服务 100 轮上限停止；续接仅恢复既有 P2 工作树，不修改根目录设置分支及其未跟踪文件。
+- 用户再次明确：A1 仅普通功能边界，不碰 A 安全 suite/文件，**本次不调用模型**。C 继续现有实现和正常沙箱良性验证，不重启 A 安全研究。此前 `about:blank` 首次失败及服务拒绝保持未解决，不换代理绕过。
+- D 后续四个原始提交按顺序集成为 `7224c87a`、`9d946b4f`、`d1cb0581`、`2d818cc4`；已集成的 `52900f2` 不重复获取。D 的 75/75、98/98、23/23、17/17 仅为其交付文件树的定向证据，不等同最终集成结果。
+- C 首个产品提交 `7a30c5f0` 集成为 `98ee052c`；普通 UI 测试适配与独立良性 Electron 驱动 `1d4bec0d` 集成为 `0aacdb53`。C 交付普通 UI 20 项/169 断言，原 13 项/111 断言保留；联合 D 38 项报 58/58。这是修复 R-D 发现前的定向证据；T3 对照与最终真实视觉文档仍待交付。
+- B3 专属分支读取回归报告 17/17（16 行为子项+父容器）、372 断言；组合 backend/model 63/63，相邻 edit-target 20/20、service 49/49、HTTP 11/11。提交及主树注册仍待交付。父核对 `session-navigation.js` 后保留其有意的 bounded text-only 只读预览契约，不扩成执行时间线；该页的可视化 UI 是 P1 既有范围差异，不能以 API 历史读取+共享 viewer 回归宣称该页已支持。活动 Classic 恢复及 Runtime live/dormant 的实际渲染链与它分别记录。
+- A1 良性样例提交 `a6247de7` 集成为 `a2cdaeb0`。真实 Pi 无模型契约 13/13 的 TEMP 证据由 A1 收尾，明确包含 synthetic assistant setup，不是模型调用验收。
+- B 原代理结束时尚未产生提交，不能按界面 completed 当作开发完成。新增 B2 收尾存储/锁/维护/性能，B3 独占新增分支读链回归测试；共享 B 工作树但文件所有权分离，不替对方提交。
+- E2 首批登记已直接提交到集成树 `3584bcd2`：新增 D 三套及 A1 normal 共四叶，canonical 358→362，原叶删除/重复/换组均 0。新增测试 45/45、CI 守卫 12/12、test:ci 10 叶 exit 0；Store 135/135 场景、529 assertions、另 skip 3。该运行当时旧 UI 10 pass/3 fail 原样记录，之后才集成 C 适配 `0aacdb53`，不得混称同一次运行通过。B/A1/C 后续新入口仍须逐项登记。
+- R-D 已完成首轮只读独立审查，四项 Important 待修，见下节。最终完整 canonical、真实视觉、正式构建及整体独立验收仍待完成。
+
+### 首轮独立功能审查（R-D）
+
+- 审查范围：`dfdc1dde` → `a2cdaeb01ad50ed4cad5f82f08361d5f707546a4` 的 D 模块与当前 C dialog 调用边界；结论 **不通过**，Blocker 0 / Important 4 / Nit 0 / Pre-existing 0。均为良性普通功能复现，不是安全资格结论。
+- RD-1：自然高度反馈 hold 误锁 CSS transition；200→600px 的内容最终 frame 207px/capped，基线 frame 600px。**未解决**，D2 负责。
+- RD-2：全屏消费者用 naturalHeight 绕过 hold；静态 `calc(100vh + 10px)` 在全屏持续增高。**未解决**，C 负责，不得仅以 65536px 上限当作修复。
+- RD-3：12000px 长内容全屏往返，iframe 内部 scrollY 7904→0→0，同 realm 和输入状态仍存。**未解决**，C 与 D2 配合 presentation 协议；宿主发消息后立即改尺寸存在先 clamp 后保存的竞态，必须保证保存完成再切换，不授予宿主滚动能力。
+- RD-4：`clearInterval(String(handle))` 未按原生接口转换句柄，interval 残留。**未解决**，D2 负责。
+- 证据：`C:/Users/21022/AppData/Local/Temp/pi-gui-rd-review-zhpvD1/report-final.json` 与同目录 `benign-functional-probe.cjs`；Chrome 158.0.8127.88、页面异常 0、源摘要无变化。R-D 未运行 Electron/A 安全 suite/Pi/模型/产物或完整 canonical。
+- C 首轮正常沙箱良性 UI 报 22 checks、9 截图，生产 main/preload/native 注册、四组宽窄深浅及 DPR 1.5；证据 `C:/Users/21022/AppData/Local/Temp/pi-visual-replies-zhKjh1/evidence/viewer.json`。其中样例约 4008px，**不能覆盖 RD-3 的 >4096px 场景**；修后须补相应良性回归及增量独立复审，不能沿用本次通过数字。
+- 新增 D2 在原 D 工作树修复 RD-1/RD-4，并与 C 对齐最小协议：resize 可选 `feedback:boolean`；仅显式 false 才消费原始 naturalHeight，true 保持全屏高度，缺字段 v1 仅采用 height。presentation/presentation-ready 均严格六字段 schemaVersion/id/nonce/type/expanded/sequence（正安全整数）；true 在本 realm 同步保存后 ACK，C 等 ACK 后才改几何；false 先恢复内联几何，再由 frame 双原生 rAF 恢复内部滚动后 ACK，不受受控 runtime 暂停影响。该契约待实现与回归，不等于发现已修复。超时/过期 ACK 不得继续切换几何或污染下一次展开。
+- 最多三轮审查原则不变，未修复 Important 不得验收通过。
+
+### B3 测试交付依赖
+
+- 测试提交 `2cd34ec2e855c71364e4b58ca78dc642347b6832` 仅含 branches 套件及专属 fixture，尚待与 B2 产品改动成组集成；新增叶为 `node --test tests/html-artifact-branches.cjs`，fixture 不注册。
+- B3 最终同树组合 backend/model/branches 为 63/63、exit 0、9216.1951ms；branches 17/17、372 实际断言、8623.2296ms，skip/fail/cancel/todo 0；相邻 target 20/20、service 49/49、HTTP 11/11。**该证据包含 B2 当前未提交产品树，不证明单独获取测试提交后的主集成树已通过**；必须取得 B2 产品提交后在主树补验。
+
 ## 子 Agent 文件所有权
 
 | 线 | 所有权 | 禁止无序交叉修改 |
