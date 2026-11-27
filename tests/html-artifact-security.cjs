@@ -272,11 +272,11 @@ test('subframe and unknown-frame preloads never even import Electron or expose a
   }
 });
 
-test('main preload exposes only fixed piGui.htmlArtifacts channels and projects request fields', async () => {
+test('main preload keeps one bridge and its htmlArtifacts channels project request fields', async () => {
   const { bridge, bridges, invokes } = loadPreload(true);
+  assert.deepEqual(Object.keys(bridges), ['piGuiDesktop']);
   assert.equal(bridge.isDesktop, true);
-  assert.deepEqual(Object.keys(bridges.piGui), ['htmlArtifacts']);
-  const artifacts = bridges.piGui.htmlArtifacts;
+  const artifacts = bridge.htmlArtifacts;
   await artifacts.registerFrame({ name: FRAME_NAME, channel: 'arbitrary', frameId: 2, html: 'untrusted' });
   await artifacts.releaseFrame({ name: FRAME_NAME, frameId: 2 });
   assert.deepEqual(JSON.parse(JSON.stringify(invokes)), [[CHANNELS.register, { name: FRAME_NAME }], [CHANNELS.release, { name: FRAME_NAME }]]);

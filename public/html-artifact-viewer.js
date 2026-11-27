@@ -48,7 +48,7 @@ export function createHtmlArtifactViewer(reference, {
   status.append(caption, retry);
   wrapper.append(status);
 
-  const bridge = view.piGui?.htmlArtifacts;
+  const bridge = view.piGuiDesktop?.htmlArtifacts;
   let frame = null, disposed = false, started = false, registered = false, inFlight = false;
   let nonce = null, controller = null, attempt = 0, heightFrame = null, pendingHeight = null;
   let unsubscribeTheme = null, themeObserver = null, lastTheme = '';

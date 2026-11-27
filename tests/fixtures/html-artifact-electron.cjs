@@ -192,7 +192,7 @@ async function run() {
     check('normal-host-sandbox', prefs.sandbox === true && prefs.contextIsolation === true && prefs.webSecurity === true
       && !app.commandLine.hasSwitch('no-sandbox') && !app.commandLine.hasSwitch('remote-debugging-port'));
     check('trusted-main-api-token', await evaluate(async () => (await (await fetch('/api/main')).json()).ok));
-    check('production-preload-main-bridge', await evaluate(() => piGuiDesktop.isDesktop && typeof piGui.htmlArtifacts.registerFrame === 'function'));
+    check('production-preload-main-bridge', await evaluate(() => piGuiDesktop.isDesktop && typeof piGuiDesktop.htmlArtifacts.registerFrame === 'function'));
     await evaluate(async () => { localStorage.setItem('host-canary', 'synthetic'); try { await fetch('/redirect'); } catch {} });
     await until(() => arrivals.some(a => a.route === 'sink'));
     check('redirect-never-leaks-token', arrivals.filter(a => a.route === 'sink').every(a => !a.token));
@@ -208,7 +208,7 @@ async function run() {
       const previous = new Set(win.webContents.mainFrame.framesInSubtree.map(f => f.frameTreeNodeId));
       const result = await evaluate(async id => {
         const f = document.createElement('iframe'); f.id = id; f.name = 'pi-gui-html-artifact'; f.setAttribute('sandbox', ''); document.body.append(f);
-        return piGui.htmlArtifacts.registerFrame({ name: 'pi-gui-html-artifact' });
+        return piGuiDesktop.htmlArtifacts.registerFrame({ name: 'pi-gui-html-artifact' });
       }, id);
       check('register-' + id, result?.ok === true && result?.javascriptEnabled === true, result);
       const frame = win.webContents.mainFrame.framesInSubtree.find(f => !previous.has(f.frameTreeNodeId) && f.name === FRAME_NAME);
@@ -249,7 +249,7 @@ async function run() {
     check('renamed-artifact-retains-native-identity', frameById(nativeId).name !== FRAME_NAME && security.isArtifactFrame(frameById(nativeId), win.webContents));
     check('real-child-frame-cannot-authorize-ipc', !security.isTrustedSender({ sender: win.webContents, senderFrame: frameById(nativeId), isMainFrame: true })
       && security.guardHandler(() => 'bad')({ sender: win.webContents, senderFrame: frameById(nativeId) }).code === 'untrusted_sender');
-    await evaluate(async () => piGui.htmlArtifacts.releaseFrame({ name: 'pi-gui-html-artifact' }));
+    await evaluate(async () => piGuiDesktop.htmlArtifacts.releaseFrame({ name: 'pi-gui-html-artifact' }));
     check('release-of-live-frame-does-not-remove-guards', security.shouldBlockRequest({ frame: frameById(nativeId), webContents: win.webContents, url: origin + '/api/main' }));
 
     stage('production-srcdoc-prefix-attacks');
@@ -295,7 +295,7 @@ async function run() {
     check('native-download-gate-denies-while-any-artifact-lives', downloads[0]);
     await evaluate(async () => {
       document.getElementById('native').remove(); document.getElementById('prefix').remove();
-      return piGui.htmlArtifacts.releaseFrame({ name: 'pi-gui-html-artifact' });
+      return piGuiDesktop.htmlArtifacts.releaseFrame({ name: 'pi-gui-html-artifact' });
     });
     await download(); await until(() => downloads.length === 2);
     check('host-download-policy-restored-after-all-artifacts-removed', !downloads[1]);

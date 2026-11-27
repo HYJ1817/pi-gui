@@ -87,9 +87,10 @@ try {
     };
   }
 
-  // A separate minimal bridge is the fixed HTML-artifact contract. Existing
-  // desktop consumers retain piGuiDesktop; artifacts never receive either.
-  contextBridge.exposeInMainWorld('piGui', {
+  contextBridge.exposeInMainWorld('piGuiDesktop', {
+    /** 供前端判断「我在桌面版里」（网页版没有这个对象）。 */
+    isDesktop: true,
+    // HTML-artifact frames use the same single bridge, never a second world.
     // Append a named EMPTY frame, await registration, only then assign srcdoc.
     // Removal precedes release; neither method accepts HTML, IDs or IPC names.
     htmlArtifacts: {
@@ -100,11 +101,6 @@ try {
         name: typeof request?.name === 'string' ? request.name : '',
       }),
     },
-  });
-
-  contextBridge.exposeInMainWorld('piGuiDesktop', {
-    /** 供前端判断「我在桌面版里」（网页版没有这个对象）。 */
-    isDesktop: true,
     // 固定操作。安装授权和本机文件选择都由主进程持有。
     environmentSetup: {
       install: (planId, components) => ipcRenderer.invoke('pi-gui:environment-install', { planId, components }),

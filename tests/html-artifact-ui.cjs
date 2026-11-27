@@ -44,7 +44,7 @@ function surface(t, module = 'html-artifact-viewer.js', options = {}) {
     }
     return { json: async () => ({ ok: true, items: [], files: [], isRepo: false }) };
   };
-  w.piGui = { htmlArtifacts: {
+  w.piGuiDesktop = { htmlArtifacts: {
     registerFrame(request) {
       const frames = [...d.querySelectorAll('iframe[name="pi-gui-html-artifact"]')];
       registered.push({ request, frames, sandboxes: frames.map(f => f.getAttribute('sandbox')) });
@@ -137,7 +137,7 @@ test('unqualified or missing desktop support never reads, allows scripts or fall
   const viewer = mounted(s); await tick();
   assert.equal(s.reads.length, 0); assert.equal(viewer.node.dataset.state, 'error');
   assert.equal(viewer.node.querySelector('iframe'), null); assert.equal(s.released.length, 1);
-  delete s.w.piGui;
+  delete s.w.piGuiDesktop;
   const second = mounted(s, reference('missing')); await tick();
   assert.equal(second.node.dataset.state, 'error'); assert.equal(s.reads.length, 0);
 });
