@@ -25,10 +25,18 @@ async function main() {
   assert.deepEqual(new Set(union), new Set(plan.leaves));
 
   for (const command of plan.leaves) {
-    if (command.startsWith('node tests/')) {
-      const file = command.split(/\s+/)[1];
+    for (const file of planModule.testFilesForCommand(command)) {
       assert.ok(fs.existsSync(path.join(root, file)), `test file is missing: ${file}`);
     }
+  }
+  assert.deepEqual(planModule.testFilesForCommand('node --test tests/one.cjs tests/two.cjs'), ['tests/one.cjs', 'tests/two.cjs']);
+  assert.deepEqual(planModule.testFilesForCommand('node tests/one.cjs tests/argument-is-not-a-suite.cjs'), ['tests/one.cjs']);
+  for (const command of ['node tests/__ci_missing__.cjs',
+    'node --test tests/ci-test-plan.cjs tests/__ci_missing__.cjs']) {
+    const missingFile = planModule.createTestGroupPlan({ root, packageJson: { scripts: {
+      ...packageJson.scripts, test: packageJson.scripts.test + ' && ' + command,
+    } } });
+    assert.throws(() => planModule.validateTestGroupPlan(missingFile), /canonical test file does not exist.*__ci_missing__/);
   }
 
   const groupOf = (name) => plan.groupByCommand.get(`node tests/${name}`);

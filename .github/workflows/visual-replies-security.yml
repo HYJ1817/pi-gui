@@ -1,0 +1,63 @@
+# Independent opt-in evidence, not canonical, model/live or full UI acceptance.
+# Do not add this manual job to the automatic CI gate without separate approval.
+name: Visual Replies sandbox security
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24.22.1'
+  PI_GUI_ELECTRON_MIRROR: 'https://npmmirror.com/mirrors/electron/'
+
+jobs:
+  sandbox-security:
+    name: Normal-sandbox Artifact security
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      # Use the driver's existing os.tmpdir() interface, not a future custom
+      # evidence-root option. Each attempt owns a fresh parent directory.
+      TEMP: ${{ runner.temp }}/visual-replies-security-${{ github.run_id }}-${{ github.run_attempt }}
+      TMP: ${{ runner.temp }}/visual-replies-security-${{ github.run_id }}-${{ github.run_attempt }}
+      TMPDIR: ${{ runner.temp }}/visual-replies-security-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare Electron runtime
+        shell: pwsh
+        run: node scripts/prepare-electron-ci.mjs
+
+      - name: Prepare fresh fixture evidence directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Path "$env:TEMP" -ErrorAction Stop | Out-Null
+
+      - name: Run normal-sandbox Artifact security
+        run: npm run test:html-artifacts:security:electron
+
+      # Only this run's synthetic fixture report and screenshots. Never upload
+      # HOME, sessions, credentials, logs or a real-model payload directory.
+      - name: Upload synthetic security evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-replies-sandbox-security-${{ github.run_attempt }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            ${{ env.TEMP }}/pi-html-artifact-security-*/report.json
+            ${{ env.TEMP }}/pi-html-artifact-security-*/**/*.png

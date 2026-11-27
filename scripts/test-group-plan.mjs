@@ -27,6 +27,7 @@ const FAULT_TESTS = new Set([
   'pi-supervisor.cjs',
   'runtime-resource-cleanup.cjs',
   'runtime-processes.cjs',
+  'html-artifact-process.cjs',
   'candidate-write-faults.cjs',
   'candidate-transactions.cjs',
   'candidate-recovery-errors.cjs',
@@ -51,6 +52,7 @@ const UI_PATTERNS = [
   /^worktrees-ui\.cjs$/,
   /^session-change-ui\.cjs$/,
   /^gui-browser-ui\.cjs$/,
+  /^html-artifact-(?:ui|viewer|frame|layout|reading|theme|activity|lifecycle)(?:[.-])/,
 ];
 
 function validateGroupNames(groups) {
@@ -105,15 +107,31 @@ function expandLeafCommands(packageJson) {
   return leaves;
 }
 
-export function classifyTestCommand(command, groups = GROUPS) {
-  validateGroupNames(groups);
-  const match = String(command).match(/^node tests\/([^\s]+)(?:\s|$)/);
-  const name = match ? match[1] : '';
+// Inspect the two canonical Node forms without expanding or executing shell
+// text. A normal script's later arguments are data, not additional test files.
+export function testFilesForCommand(command) {
+  const match = String(command).match(/^node (?:--test )?(tests\/[^\s]+)(?:\s|$)/);
+  if (!match) return [];
+  if (!String(command).startsWith('node --test ')) return [match[1]];
+  return String(command).slice('node --test '.length).split(/\s+/)
+    .filter(value => /^tests\//.test(value));
+}
+
+function groupForTestFile(file) {
+  const name = file.slice('tests/'.length);
   if (FAULT_TESTS.has(name)) return 'faults';
   if (NATIVE_TESTS.has(name)) return 'native';
-  if (/^session-(?:change|revert)-/.test(name)) return 'security';
+  if (/^session-(?:change|revert)-/.test(name) || name === 'html-artifact-security.cjs') return 'security';
   if (UI_PATTERNS.some((pattern) => pattern.test(name))) return 'ui';
   return 'core';
+}
+
+export function classifyTestCommand(command, groups = GROUPS) {
+  validateGroupNames(groups);
+  const assigned = new Set(testFilesForCommand(command).map(groupForTestFile));
+  // Keep multi-file Node invocations intact; mixed boundaries use core instead
+  // of splitting a single process into a second executable suite list.
+  return assigned.size === 1 ? [...assigned][0] : 'core';
 }
 
 export function createTestGroupPlan({ root = process.cwd(), packageJson, groups = GROUPS } = {}) {
@@ -149,10 +167,9 @@ export function validateTestGroupPlan(plan) {
   if (new Set(grouped).size !== new Set(plan.leaves).size) throw new Error('group union differs from canonical test chain');
 
   for (const command of plan.leaves) {
-    const match = command.match(/^node tests\/([^\s]+)(?:\s|$)/);
-    if (!match) continue;
-    const file = path.join(plan.root, 'tests', match[1]);
-    if (!fs.existsSync(file)) throw new Error(`canonical test file does not exist: ${match[1]}`);
+    for (const file of testFilesForCommand(command)) {
+      if (!fs.existsSync(path.join(plan.root, file))) throw new Error(`canonical test file does not exist: ${file}`);
+    }
   }
   return true;
 }
