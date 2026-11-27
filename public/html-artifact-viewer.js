@@ -4,6 +4,9 @@ import { projectHtmlArtifactReference, HTML_ARTIFACT_MAX_BYTES } from './html-ar
 import { captureReadingPosition, restoreReadingPosition, findScrollContainer } from './reading-position.js';
 import { readHtmlArtifactTheme } from './html-artifact-theme.js';
 import { htmlArtifactDocument, HTML_ARTIFACT_FRAME_NAME, HTML_ARTIFACT_PERMISSIONS } from './html-artifact-frame.js';
+import { createHtmlArtifactResizeController, createHtmlArtifactVisibilityController } from './html-artifact-layout.js';
+import { createArtifactDialog } from './html-artifact-dialog.js';
+import { createArtifactInteractions, validArtifactMessage } from './html-artifact-interactions.js';
 
 const viewers = new WeakMap(); // DOM resource ownership, never an HTML/message cache.
 const REGISTER_TIMEOUT_MS = 3000;
@@ -50,7 +53,8 @@ export function createHtmlArtifactViewer(reference, {
 
   const bridge = view.piGuiDesktop?.htmlArtifacts;
   let frame = null, disposed = false, started = false, registered = false, inFlight = false;
-  let nonce = null, controller = null, attempt = 0, heightFrame = null, pendingHeight = null;
+  let nonce = null, controller = null, attempt = 0, resizer = null;
+  let visibility = null, visible = false, lastEscape = -Infinity;
   let unsubscribeTheme = null, themeObserver = null, lastTheme = '';
   const timers = new Map();
   const current = () => !disposed && wrapper.isConnected && isCurrent();
@@ -73,22 +77,35 @@ export function createHtmlArtifactViewer(reference, {
   const delay = ms => bounded('pending', new Promise(resolve => {
     later('pending-delay', ms, () => resolve(true));
   }), ms + 50);
-  const layout = action => {
+  const layout = (action, options = {}) => {
     if (!current()) return;
-    if (preserveLayout) return preserveLayout(action);
+    if (preserveLayout && options.isPinned !== false) return preserveLayout(action);
     const scroller = findScrollContainer(wrapper);
-    const bookmark = scroller?.clientHeight > 0 ? captureReadingPosition(scroller, scroller) : null;
+    const bookmark = scroller?.clientHeight > 0 ? captureReadingPosition(scroller, scroller, { isPinned: false }) : null;
     action();
     if (bookmark) restoreReadingPosition(scroller, scroller, bookmark);
   };
+  const dialog = createArtifactDialog({ wrapper, title: artifact.title, document: doc, layout,
+    onChange: () => { sendVisibility(); visibility?.refresh(); } });
+  const notice = doc.createElement('div');
+  notice.className = 'html-artifact-notice'; notice.setAttribute('role', 'status'); notice.hidden = true;
+  wrapper.append(notice);
+  const interactions = createArtifactInteractions({ document: doc, isCurrent: current, getFrame: () => frame,
+    closeExpanded: () => dialog.close(), report: text => { notice.textContent = text; notice.hidden = false; } });
+  function sendVisibility() {
+    if (!current() || !registered || !frame || !nonce) return;
+    frame.contentWindow?.postMessage({ schemaVersion: 1, type: 'visibility', id: artifact.id, nonce,
+      visible: !doc.hidden && (visible || dialog.isExpanded()) }, '*');
+  }
   const releaseRegistration = () => {
     try { Promise.resolve(bridge?.releaseFrame?.({ name: HTML_ARTIFACT_FRAME_NAME })).catch(() => {}); }
     catch { /* best-effort cleanup; native guards never unprotect a live frame */ }
   };
   const removeFrame = () => {
-    if (heightFrame !== null) view.cancelAnimationFrame(heightFrame);
-    heightFrame = null; pendingHeight = null;
+    resizer?.dispose(); resizer = null;
+    interactions.closeImage(); dialog.close();
     if (frame) { frame.remove(); frame.removeAttribute('srcdoc'); frame = null; }
+    dialog.setFrame(null);
     if (registered) releaseRegistration(); // Removal MUST precede release.
     registered = false; nonce = null;
   };
@@ -114,20 +131,21 @@ export function createHtmlArtifactViewer(reference, {
   const onMessage = event => {
     if (!current() || !registered || !nonce || !frame || event.source !== frame.contentWindow || event.origin !== 'null') return;
     const value = event.data;
-    if (!value || value.schemaVersion !== 1 || value.id !== artifact.id || value.nonce !== nonce) return;
+    if (!value || value.id !== artifact.id || value.nonce !== nonce || !validArtifactMessage(value)) return;
     if (value.type === 'ready') {
+      if (wrapper.dataset.state === 'ready') return;
       clearTimer('ready');
       layout(() => { wrapper.dataset.state = 'ready'; wrapper.setAttribute('aria-busy', 'false'); status.hidden = true; });
-      sendTheme(true);
-    } else if (value.type === 'resize' && typeof value.height === 'number' && Number.isFinite(value.height)) {
-      const next = Math.max(80, Math.min(4096, Math.ceil(value.height)));
-      if (next === pendingHeight) return;
-      pendingHeight = next;
-      if (heightFrame !== null) return;
-      heightFrame = view.requestAnimationFrame(() => {
-        heightFrame = null;
-        if (current() && frame) layout(() => { frame.style.height = `${pendingHeight}px`; });
-      });
+      sendTheme(true); sendVisibility();
+    } else if (value.type === 'resize') {
+      resizer?.accept(value);
+    } else if (wrapper.dataset.state === 'ready') {
+      if (value.type === 'escape' && view.performance.now() - lastEscape >= 250) {
+        lastEscape = view.performance.now();
+        if (interactions.hasImage()) interactions.closeImage();
+        else if (dialog.isExpanded()) dialog.close();
+      } else if (value.type === 'link') void interactions.link(value.href);
+      else if (value.type === 'image') interactions.image(value.src, value.alt);
     }
   };
   function appendEmptyFrame() {
@@ -140,7 +158,10 @@ export function createHtmlArtifactViewer(reference, {
     frame.style.height = `${artifact.height}px`;
     // No src attribute: the default empty about:blank must be in the real frame
     // tree before registration can acknowledge this specific child identity.
-    wrapper.prepend(frame);
+    dialog.stage.append(frame);
+    dialog.setFrame(frame, artifact.height);
+    resizer = createHtmlArtifactResizeController({ view, isCurrent: current,
+      apply: value => { if (frame) dialog.resize(value); } });
   }
   async function register(generation) {
     if (!capturedScope || typeof bridge?.registerFrame !== 'function') return false;
@@ -209,16 +230,22 @@ export function createHtmlArtifactViewer(reference, {
     themeObserver = new view.MutationObserver(sendTheme);
     for (const target of [doc.documentElement, doc.body]) if (target) themeObserver.observe(target,
       { attributes: true, attributeFilter: ['data-theme', 'data-theme-preference', 'style', 'class'] });
-    void load();
+    visibility = createHtmlArtifactVisibilityController({ node: wrapper, document: doc,
+      onVisibility: next => {
+        visible = next;
+        if (next && !frame && !inFlight && wrapper.dataset.state === 'loading') void load();
+        else sendVisibility();
+      } });
   }
   function dispose() {
     if (disposed) return;
     disposed = true; ++attempt;
     controller?.abort(); controller = null;
     for (const key of [...timers.keys()]) clearTimer(key);
-    unsubscribeTheme?.(); themeObserver?.disconnect();
+    unsubscribeTheme?.(); themeObserver?.disconnect(); visibility?.dispose();
     view.removeEventListener('message', onMessage);
     retry.onclick = null;
+    interactions.dispose(); dialog.dispose();
     removeFrame();
     viewers.delete(wrapper);
   }
