@@ -101,11 +101,11 @@ export function createHtmlArtifactViewer(reference, {
       status.hidden = false; caption.textContent = text; retry.hidden = false; retry.disabled = false;
     });
   };
-  const sendTheme = () => {
+  const sendTheme = (force = false) => {
     if (!current() || !registered || !nonce || !frame) return;
     const theme = readHtmlArtifactTheme(doc);
     const signature = JSON.stringify(theme);
-    if (lastTheme === signature) return;
+    if (!force && lastTheme === signature) return;
     lastTheme = signature;
     // Opaque srcdoc has no target origin. Only this exact frame receives these
     // resolved theme values, never host handles, commands, HTML or credentials.
@@ -118,10 +118,10 @@ export function createHtmlArtifactViewer(reference, {
     if (value.type === 'ready') {
       clearTimer('ready');
       layout(() => { wrapper.dataset.state = 'ready'; wrapper.setAttribute('aria-busy', 'false'); status.hidden = true; });
-      sendTheme();
+      sendTheme(true);
     } else if (value.type === 'resize' && typeof value.height === 'number' && Number.isFinite(value.height)) {
       const next = Math.max(80, Math.min(4096, Math.ceil(value.height)));
-      if (`${next}px` === frame.style.height) return;
+      if (next === pendingHeight) return;
       pendingHeight = next;
       if (heightFrame !== null) return;
       heightFrame = view.requestAnimationFrame(() => {
