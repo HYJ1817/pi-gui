@@ -14,8 +14,9 @@
 const MAX_BOOKMARKS = 100;
 const bookmarks = new Map();
 
-const ANCHORS = '[data-anchor-id], [data-block-id], [data-history-message-id]';
-const readingId = node => node.dataset.anchorId || node.dataset.blockId || node.dataset.historyMessageId || node.dataset.navId || node.id;
+const ANCHORS = '[data-anchor-id], [data-block-id], [data-history-message-id], [data-artifact-id]';
+const readingId = node => node.dataset.anchorId || node.dataset.blockId || node.dataset.historyMessageId
+  || (node.dataset.artifactId ? 'artifact-' + node.dataset.artifactId : '') || node.dataset.navId || node.id;
 
 function* readingAnchors(content) {
   for (const child of content?.children || []) {
@@ -30,6 +31,12 @@ function* readingAnchors(content) {
             && node.querySelector(ANCHORS)) continue;
         yield node;
       }
+    } else if ((child.matches('.thread, [data-reading-content]') || !readingId(child))
+        && child.querySelector(ANCHORS)) {
+      // A viewer may pass the scroller itself rather than .thread. Transparent
+      // layout/dialog wrappers are not a reading row; keep the stable artifact
+      // or message below them as anchor, without ever entering iframe content.
+      yield* readingAnchors(child);
     } else yield child;
   }
 }
