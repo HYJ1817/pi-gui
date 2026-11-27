@@ -375,7 +375,9 @@ function classicArtifactNode(reference) {
   const owner = S.legacyOwner && { ...S.legacyOwner };
   const ownerKey = JSON.stringify(owner);
   const viewer = createHtmlArtifactViewer(artifact, {
-    scope: owner && owner.sessionId === artifact.sessionId ? { conversationId: 'classic-chat', owner } : null,
+    // The snapshot keeps its original session identity. Authorization belongs
+    // to the current verified native branch, which may inherit that reference.
+    scope: owner ? { conversationId: 'classic-chat', owner } : null,
     isCurrent: () => generation === threadGeneration && JSON.stringify(S.legacyOwner && { ...S.legacyOwner }) === ownerKey,
     preserveLayout(change) {
       const stream = el.stream;
