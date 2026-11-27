@@ -109,8 +109,14 @@
 - B4b 命中 100 轮上限死亡前 I1 四提交已完成；父 dry-run 验证干净后按序 cherry-pick：`38afdcb1`（store 释放语义）、`52da53fc`（启动/维护如实上报）、`3d1a1db5`（回归测试）、`b6961179`（验收文档）。B4b 死亡后新派 **B5**（同树）接手 B-SAF-01 注入修复 + wire 形状取证。
 - crash 修复落盘为独立回滚边界 `939eff61`（projection typeof 守卫 + backend 回归一例），stash 已 drop。
 - **集成态定向实测**（HEAD `939eff61` 组合状态，NODE_PATH 本地依赖）：backend **39/39**、lock **33/33 场景 270 断言**、maintenance **30/30 场景 189 断言**、store **135/135 场景 529 断言 skip 3**、process **8/8**、performance 默认 **16/16 断言**（median 1141.492ms，htmlReadBytes 65648/32calls，digest 一致）。全部 exit 0；skip 不计入分母。
-- 真实模型闭环（用户授权的 magpie 网关路径）已在集成态重跑——结果待补记于此。
+- 真实模型闭环（用户授权的 magpie 网关路径）已在集成态重跑——`normal-sandbox`/`production-preload`/`explicit-model-selected` PASS，真实模型**正确调用 html_render 一次**（args title/height/html 合规、ID 匹配、45ms tool roundtrip），但 toolResult 返回 `html_bridge_unavailable`。**模型行为、崩溃修复、pi 契约全部证明无恙**；失败在 pi↔backend 桥准入层，父正在独立定位（详见下节）。
 - I1 正式关闭、B-SAF-01 关闭仍待第二轮增量独立复审（审查对象须含集成树身份 `939eff61` 及后续，不能仅以 B 树身份为准）。
+
+### B5 交付与 wire 取证（父集成，2026-11-27 第三批）
+
+- B5 两提交已集成：`a484b6f2`（B-SAF-01 定向注入修复，store 断言 **529→542**，+13 为恢复的命中断言）、`a6782398`（wire 取证文档）。集成态实测 store **135/135 场景 542 断言 skip 3**、backend **39/39**，exit 0。**B-SAF-01 覆盖缺口已在代码层闭合**，正式关闭待第二轮增量复审。
+- **wire 形状取证结论**（真实 pi 1.6.0 + magpie + TEMP，生产 server.js + TEMP loader 换回修复前 projection 复现崩溃）：准确违规路径 `message_start.message.toolsAdded[6].parameters.properties.ready.properties.type`，typeof object（schema 描述对象，`{type,enum}` 两键），父节点为 process 扩展 `ready` 参数的 JSON Schema；上游 pi `dist/core/agent-session.js` 仅 `role==='system'` transcript 消息携带 `toolsAdded`，随 `message_start` 下发。通用违规形状为 `toolsAdded[*].parameters` 中任意嵌套 schema 描述对象。**证实父的 typeof 守卫语义正确**（非字符串 type 按非 execution 处理，这类节点根本不是 execution 事件）。离线 fakePi 不发 system/toolsAdded/turn_start/end/text_start/end，故该形状离线不可见——fixture 偏差已记录，未修改 fixture。证据 `C:/Users/21022/AppData/Local/Temp/pi-wire-forensics-V3NePQ/`。
+- **桥准入缺陷（新，父调查中）**：真实 pi 路径下 extension **已加载**（model 成功调用、错误经 extension 结构返回），但 hello/publish POST 失败为 `html_bridge_unavailable`。父用诊断插桩实证：plain TEMP world（repro2 路径）`prepare()` **完全成功**（contract=true、valid-after-listen=true、SUCCESS）；functional driver Electron 路径下 pi 子进程带 `--extension` 但桥握手失败。离线 fakePi 同驱动路径桥**成功**——差异在 live 环境/时序，非 pi 版本。逐项排除中；**在父定位前不派新代理**，避免并行调查互相污染。
 
 ### C 线交接
 
