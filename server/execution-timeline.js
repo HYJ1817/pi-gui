@@ -11,18 +11,31 @@ const MAX_DETAIL_ENTRIES = 64;
 const MAX_DETAIL_BYTES = 1024 * 1024;
 const MAX_RESULT_BYTES = 32 * 1024;
 const DETAIL_TTL_MS = 120_000;
-const IDS = /^[A-Za-z0-9_.:/#-]{1,160}$/;
+// Real Pi tool call IDs carry a pipe separator (for example `xxxx-<hex>|xx…`),
+// surveyed across 127 real sessions: alphanumerics plus only DASH/UNDERSCORE/PIPE.
+// These IDs are structural JSON identifiers, never shell or path fragments.
+// STRUCTURAL ids only — never reuse this validator for display fields.
+const IDS = /^[A-Za-z0-9_.:/#|-]{1,160}$/;
+// Display fields surfaced into SSE activity (subagent key/model) are operator-
+// facing labels, not native structural ids. They must NOT admit the pipe: a pipe
+// is both outside any real model/agent naming scheme and, crucially, would defeat
+// the credential/sensitive-name separators below (a crafted `fixture|sk-…` or
+// `fixture|auth` would otherwise slip past them into outbound activity.children).
+const DISPLAY_ID = /^[A-Za-z0-9_.:/#-]{1,160}$/;
 const SOURCE_ROLE = new Set(['assistant', 'user', 'toolResult']);
 const CALL_TOOLS = new Set(['read', 'write', 'edit', 'grep', 'glob', 'find', 'ls', 'bash', 'powershell', 'subagent']);
 const SHELL_EXECUTABLES = new Set(['git', 'rg', 'grep', 'find', 'ls', 'cat', 'node', 'npm', 'pnpm', 'yarn', 'python', 'pytest', 'Get-Content', 'Get-ChildItem']);
-const SENSITIVE_NAME = /(?:^|[/_. ():\s-])(?:token|secrets?|credentials?|password|passwd|private[-_]?key|auth|oauth|api[-_]?keys?|cookies?|id_rsa|id_ed25519)(?:[/_. ():\s-]|$)|^\.(?:env|netrc|npmrc|pypirc)(?:[./]|$)|\.(?:key|pem|pfx|p12)$/i;
-const CREDENTIAL_VALUE = /(?:^|[/. ():\s_-])(?:sk-[\w-]{12,}|gh[pousr]_[\w-]{12,}|github_pat_[\w-]{12,}|AKIA[A-Z0-9]{16}|xox[baprs]-[\w-]{12,}|eyJ[\w-]{12,})/;
+// Pipe is a token boundary here too: even a defense-in-depth leak of a piped
+// display string must still trip the sensitive-name/credential filters.
+const SENSITIVE_NAME = /(?:^|[/_. ():\s|-])(?:token|secrets?|credentials?|password|passwd|private[-_]?key|auth|oauth|api[-_]?keys?|cookies?|id_rsa|id_ed25519)(?:[/_. ():\s|-]|$)|^\.(?:env|netrc|npmrc|pypirc)(?:[./]|$)|\.(?:key|pem|pfx|p12)$/i;
+const CREDENTIAL_VALUE = /(?:^|[/. ():\s_|-])(?:sk-[\w-]{12,}|gh[pousr]_[\w-]{12,}|github_pat_[\w-]{12,}|AKIA[A-Z0-9]{16}|xox[baprs]-[\w-]{12,}|eyJ[\w-]{12,})/;
 const RUNTIME_OWNER_KEYS = ['backendInstance', 'projectId', 'repoId', 'workspaceId', 'workspaceEpoch',
   'conversationId', 'runtimeId', 'runtimeGeneration', 'sessionId'];
 const CLASSIC_SCOPE_KEYS = ['kind', 'bridgeInstance', 'bridgeRun', 'workspaceKey', 'workspaceGeneration', 'sessionId'];
 const witnessed = new WeakSet(), nativeDetails = new WeakMap();
 
 const validId = value => typeof value === 'string' && IDS.test(value);
+const displayId = value => typeof value === 'string' && DISPLAY_ID.test(value);
 const number = value => Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 const limit = (value, fallback) => Number.isSafeInteger(value) && value >= 0 ? Math.min(value, fallback) : fallback;
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
@@ -104,9 +117,9 @@ function activitySummary(name, event, previous = {}) {
     const projection = subagentActivity({ id: event.toolCallId, name, status, details });
     const rows = projection?.subagents?.rows;
     if (rows?.length) {
-      summary.children = rows.filter(row => validId(row.key) && !CREDENTIAL_VALUE.test(row.key) && !SENSITIVE_NAME.test(row.key)).map(row => ({
+      summary.children = rows.filter(row => displayId(row.key) && !CREDENTIAL_VALUE.test(row.key) && !SENSITIVE_NAME.test(row.key)).map(row => ({
         id: row.key, status: row.state,
-        ...(validId(row.model) && !CREDENTIAL_VALUE.test(row.model) && !SENSITIVE_NAME.test(row.model) ? { model: row.model } : {}),
+        ...(displayId(row.model) && !CREDENTIAL_VALUE.test(row.model) && !SENSITIVE_NAME.test(row.model) ? { model: row.model } : {}),
       }));
     }
   }

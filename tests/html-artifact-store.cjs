@@ -69,13 +69,68 @@ const barrier = () => {
   async function savedFixture(extra) {
     const f = fixture(extra); f.ref = await f.store.publish(input()); return f;
   }
+  // The Store writes and fsyncs the .writer.lock owner before any business
+  // action, so an fd-blind io override injects into lock admission first and
+  // never reaches the nominal snapshot. Target by the fd returned from a
+  // snapshot openSync, or by the fixed temp/committed-dir name for open and
+  // rename (which have no fd yet). Lock-path faults stay covered by
+  // tests/html-artifact-lock.cjs; `hits` proves the intended path ran.
+  function targetFault(f, { operation, targetName, errCode, committedDir = null, shortWrite = false }) {
+    const io = Object.create(fs), opened = new Map(); let hits = 0;
+    const isTarget = file => {
+      if (typeof file !== 'string' || path.basename(file) !== targetName) return false;
+      const absolute = path.resolve(file), parent = path.dirname(absolute);
+      if (path.dirname(parent) !== path.resolve(f.root)) return false;
+      return tempPattern.test(path.basename(parent)) || (committedDir && parent === path.resolve(committedDir));
+    };
+    const injected = () => Object.assign(Error('injected target fault'), { code: errCode });
+    io.openSync = (file, ...args) => {
+      if (operation === 'openSync' && isTarget(String(file))) { hits++; throw injected(); }
+      const fd = fs.openSync(file, ...args); opened.set(fd, path.resolve(String(file))); return fd;
+    };
+    io.closeSync = (fd, ...args) => {
+      try { return fs.closeSync(fd, ...args); } finally { opened.delete(fd); }
+    };
+    if (operation === 'writeFileSync') io.writeFileSync = (fd, bytes, ...args) => {
+      if (isTarget(opened.get(fd))) {
+        hits++;
+        if (shortWrite) {
+          const data = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+          return fs.writeFileSync(fd, data.subarray(0, Math.max(0, data.length - 1)), ...args);
+        }
+        throw injected();
+      }
+      return fs.writeFileSync(fd, bytes, ...args);
+    };
+    if (operation === 'fsyncSync') io.fsyncSync = (fd, ...args) => {
+      if (isTarget(opened.get(fd))) { hits++; throw injected(); }
+      return fs.fsyncSync(fd, ...args);
+    };
+    return { io, get hits() { return hits; } };
+  }
+  function snapshotRenameFault(f, errCode, commitFirst = false) {
+    const io = Object.create(fs); let hits = 0;
+    io.renameSync = (from, to) => {
+      const source = path.resolve(String(from)), target = path.resolve(String(to));
+      if (path.dirname(source) === path.resolve(f.root) && tempPattern.test(path.basename(source))
+        && path.dirname(target) === path.resolve(f.root) && /^[a-f0-9]{64}$/.test(path.basename(target))) {
+        hits++;
+        // A lost acknowledgement after the commit is a different fault from a
+        // rename that never happened; both must not report success.
+        if (commitFirst) fs.renameSync(from, to);
+        throw Object.assign(Error('injected snapshot rename fault'), { code: errCode });
+      }
+      return fs.renameSync(from, to);
+    };
+    return { io, get hits() { return hits; } };
+  }
   async function confirm(f, refs = [f.ref.id]) {
     return collectScan(f.store, { referencedIds: refs, complete: true, beforeMs: await nextScan() });
   }
   try {
     await check('async API is exact and absent read does not create storage', async () => {
       const f = fixture();
-      assert.deepEqual(Object.keys(f.store).sort(), ['cleanupTemporary', 'collect', 'publish', 'read']);
+      assert.deepEqual(Object.keys(f.store).sort(), ['cleanupTemporary', 'collect', 'publish', 'read', 'recoverLock', 'stats']);
       const result = f.store.read('a'.repeat(64)); assert.ok(result instanceof Promise);
       await assert.rejects(result, code('html_artifact_not_found'));
       assert.equal(fs.existsSync(f.root), false);
@@ -299,26 +354,28 @@ const barrier = () => {
       assert.deepEqual(await f.store.cleanupTemporary(), { removed: 0, retained: 0 });
       await assert.rejects(f.store.read(idFor(input())), code('html_artifact_not_found'));
     });
-    for (const [operation, errCode] of [['openSync', 'EACCES'], ['writeFileSync', 'ENOSPC'], ['fsyncSync', 'EIO'], ['renameSync', 'EPERM']]) {
+    for (const [operation, errCode] of [['openSync', 'EACCES'], ['writeFileSync', 'ENOSPC'],
+      ['fsyncSync', 'EIO'], ['renameSync', 'EPERM']]) {
       await check('real temp fault injection ' + operation + '/' + errCode + ' preserves existing artifact', async () => {
-        const f = await savedFixture(), io = Object.create(fs);
-        io[operation] = (...args) => {
-          // openSync failure is restricted to the HTML file, not lock admission.
-          if (operation !== 'openSync' || String(args[0]).endsWith('document.html')) throw Object.assign(Error('private path'), { code: errCode });
-          return fs[operation](...args);
-        };
-        const store = createHtmlArtifactStore({ ...f.options, io });
-        await assert.rejects(store.publish(input({ messageId: 'next' })), code('html_artifact_storage_failed'));
+        const f = await savedFixture();
+        const fault = operation === 'renameSync' ? snapshotRenameFault(f, errCode)
+          : targetFault(f, { operation, targetName: 'document.html', errCode });
+        await assert.rejects(createHtmlArtifactStore({ ...f.options, io: fault.io })
+          .publish(input({ messageId: 'next' })), code('html_artifact_storage_failed'));
+        assert.ok(fault.hits >= 1, 'fault must hit a snapshot path, not .writer.lock');
         assert.deepEqual((await f.store.read(f.ref.id)).artifact, f.ref);
         assert.deepEqual(fs.readdirSync(f.root), [f.ref.id]);
       });
     }
-    await check('silent short writes are detected before rename', async () => {
-      const f = fixture(), io = Object.create(fs);
-      io.writeFileSync = (fd, bytes) => fs.writeFileSync(fd, bytes.subarray(0, Math.max(0, bytes.length - 1)));
-      const store = createHtmlArtifactStore({ ...f.options, io });
-      await assert.rejects(store.publish(input()), code('html_artifact_storage_corrupt'));
-      assert.deepEqual(fs.readdirSync(f.root), []);
+    await check('silent short writes to any snapshot are detected before rename', async () => {
+      for (const targetName of ['document.html', 'reference.json', '.pending']) {
+        const f = fixture();
+        const fault = targetFault(f, { operation: 'writeFileSync', targetName, errCode: 'EIO', shortWrite: true });
+        await assert.rejects(createHtmlArtifactStore({ ...f.options, io: fault.io }).publish(input()),
+          code('html_artifact_storage_corrupt'));
+        assert.ok(fault.hits >= 1);
+        assert.deepEqual(fs.readdirSync(f.root), []);
+      }
     });
     await check('lost post-rename acknowledgement remains readable/pending and retries idempotently', async () => {
       const f = fixture({ checkpoint(stage) { if (stage === 'renamed') throw Error('lost ack'); } });
@@ -330,9 +387,10 @@ const barrier = () => {
       assert.equal((await store.read(read.artifact.id)).html, input().html);
     });
     await check('rename that commits then throws is not mistaken for a successful acknowledgement', async () => {
-      const f = fixture(), io = Object.create(fs);
-      io.renameSync = (...args) => { fs.renameSync(...args); throw Error('lost rename response'); };
-      await assert.rejects(createHtmlArtifactStore({ ...f.options, io }).publish(input()), code('html_artifact_storage_failed'));
+      const f = fixture(), fault = snapshotRenameFault(f, 'EIO', true);
+      await assert.rejects(createHtmlArtifactStore({ ...f.options, io: fault.io }).publish(input()),
+        code('html_artifact_storage_failed'));
+      assert.equal(fault.hits, 1);
       assert.equal((await f.store.read(idFor(input()))).html, input().html);
     });
     await check('directory replacement at last pre-commit checkpoint never redirects HTML writes', async () => {
@@ -340,7 +398,7 @@ const barrier = () => {
       const io = Object.create(fs);
       io.openSync = (file, ...args) => {
         const fd = fs.openSync(file, ...args);
-        if (path.basename(file) === '.writer.lock') lockFd = fd;
+        if (path.basename(file) === '.writer.lock' && args[0] === 'wx') lockFd = fd;
         return fd;
       };
       const f = fixture({ io, checkpoint(stage) {
@@ -360,7 +418,7 @@ const barrier = () => {
       const io = Object.create(fs);
       io.openSync = (file, ...args) => {
         const fd = fs.openSync(file, ...args);
-        if (path.basename(file) === '.writer.lock') lockFd = fd;
+        if (path.basename(file) === '.writer.lock' && args[0] === 'wx') lockFd = fd;
         return fd;
       };
       const f = fixture({ io, checkpoint(stage) {
@@ -579,19 +637,22 @@ const barrier = () => {
       });
     }
     await check('GC regression retry must flush an existing pending marker before acknowledging', async () => {
-      const f = await savedFixture(); let flushes = 0;
-      const io = Object.create(fs);
-      io.fsyncSync = () => { flushes++; throw Object.assign(Error('pending flush failed'), { code: 'EIO' }); };
-      await assert.rejects(createHtmlArtifactStore({ ...f.options, io }).publish(input()), code('html_artifact_storage_failed'));
-      assert.equal(flushes, 1);
+      const f = await savedFixture();
+      const fault = targetFault(f, { operation: 'fsyncSync', targetName: '.pending', errCode: 'EIO',
+        committedDir: f.dir(f.ref) });
+      await assert.rejects(createHtmlArtifactStore({ ...f.options, io: fault.io }).publish(input()),
+        code('html_artifact_storage_failed'));
+      assert.equal(fault.hits, 1);
       assert.equal(fs.readFileSync(path.join(f.dir(f.ref), '.pending'), 'utf8'), '1\n');
       assert.deepEqual(await f.store.publish(input()), f.ref);
     });
     await check('GC regression silent short duplicate marker cannot acknowledge or authorize deletion', async () => {
       const f = await savedFixture(); await confirm(f);
-      const io = Object.create(fs);
-      io.writeFileSync = (fd, bytes) => fs.writeFileSync(fd, bytes.subarray(0, 1));
-      await assert.rejects(createHtmlArtifactStore({ ...f.options, io }).publish(input()), code('html_artifact_storage_corrupt'));
+      const fault = targetFault(f, { operation: 'writeFileSync', targetName: '.pending', errCode: 'EIO',
+        committedDir: f.dir(f.ref), shortWrite: true });
+      await assert.rejects(createHtmlArtifactStore({ ...f.options, io: fault.io }).publish(input()),
+        code('html_artifact_storage_corrupt'));
+      assert.ok(fault.hits >= 1);
       await assert.rejects(collectScan(f.store, { complete: true, referencedIds: [], beforeMs: await nextScan() }), code('html_artifact_storage_corrupt'));
       assert.equal(fs.readFileSync(path.join(f.dir(f.ref), 'document.html'), 'utf8'), input().html);
     });
@@ -613,7 +674,7 @@ const barrier = () => {
         let lockFd;
         const io = Object.create(fs);
         io.openSync = (file, ...args) => {
-          const fd = fs.openSync(file, ...args); if (path.basename(file) === '.writer.lock') lockFd = fd; return fd;
+          const fd = fs.openSync(file, ...args); if (path.basename(file) === '.writer.lock' && args[0] === 'wx') lockFd = fd; return fd;
         };
         const store = createHtmlArtifactStore({ ...f.options, io });
         await assert.rejects(store.collect({ scan: async () => {

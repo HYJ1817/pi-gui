@@ -228,6 +228,28 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
       assert.deepEqual(projectHtmlArtifacts(result.message).details, details);
       writeNative([assistant, result]); assert.ok(!JSON.stringify(readSessionMessages(nativeFile)).includes('HTML_CANARY'));
     });
+    await t.test('non-string type payloads in nested nodes never crash the projection', () => {
+      // Real pi wire events can carry object/number/boolean/null type payloads in
+      // nested nodes (for example content parts inside assistantMessageEvent). The
+      // projection must survive them unchanged instead of dying in startsWith.
+      const strangePart = { type: { unexpected: 'object' }, text: 'partial' };
+      const shapes = [
+        { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'x', partial: { role: 'assistant', content: [strangePart] } } },
+        { type: 'agent_end', messages: [{ role: 'assistant', content: [strangePart, { type: 0 }, { type: null }, { type: true }] }] },
+        { type: 'message_update', assistantMessageEvent: { type: ['array'], delta: 'y' } },
+      ];
+      for (const shape of shapes) {
+        const original = JSON.stringify(shape);
+        const projected = projectHtmlArtifacts(shape);
+        assert.equal(JSON.stringify(projected), original);
+        assert.deepEqual(projectHtmlArtifacts(shape), shape);
+        assert.equal(JSON.stringify(projectRuntimeEvent(shape)).includes('HTML_CANARY'), false);
+      }
+      // A non-string type payload near HTML bytes still hides the bytes through the
+      // identity-bearing fields, and never crashes because of the type payload.
+      const mixed = { type: 'tool_execution_end', toolName: 'html_render', result: { content: [{ type: { part: true }, text: input.html }] } };
+      assert.ok(!JSON.stringify(projectHtmlArtifacts(mixed)).includes('HTML_CANARY'));
+    });
     await t.test('legacy nameless completions retain ordinary tool output but never HTML bytes', () => {
       const project = createHtmlArtifactProjection();
       project({ type: 'tool_execution_start', toolCallId: 'ordinary', toolName: 'read', bridgeRun: 1 });

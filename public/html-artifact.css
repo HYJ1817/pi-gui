@@ -1,22 +1,108 @@
 .html-artifact {
+  position: relative;
   width: 100%;
   min-width: 0;
   margin: var(--ui-space-3) 0;
   color: var(--ds-text-secondary);
 }
 
-.html-artifact-frame {
+/* showModal promotes this original wrapper without disconnecting its iframe. */
+.html-artifact-surface {
   display: block;
+  position: relative;
+  inset: auto;
   width: 100%;
   min-width: 0;
-  max-width: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
   border: 0;
   background: transparent;
+  color: var(--ds-text-primary);
+  overflow: visible;
 }
 
-.html-artifact[data-state="loading"] .html-artifact-frame {
-  visibility: hidden;
+.html-artifact-viewport {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
+
+.html-artifact-stage { position: relative; min-width: 0; }
+
+.html-artifact-frame {
+  display: block;
+  position: absolute;
+  inset: 0 auto auto 0;
+  min-width: 0;
+  border: 0;
+  background: var(--ds-bg-primary);
+  transform-origin: top left;
+}
+
+.html-artifact-expand {
+  position: absolute;
+  inset-block-start: var(--ui-space-2);
+  inset-inline-end: var(--ui-space-2);
+  background: var(--ds-bg-elevated-opaque);
+  box-shadow: var(--ds-shadow-popover);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.html-artifact:hover .html-artifact-expand,
+.html-artifact:focus-within .html-artifact-expand {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.html-artifact-controls { display: none; }
+
+.html-artifact-surface[open] {
+  position: fixed;
+  inset: max(var(--ui-space-4), var(--native-titlebar-height, 0px)) var(--ui-space-4) var(--ui-space-4);
+  width: min(1176px, calc(100vw - 2 * var(--ui-space-4)));
+  height: calc(100dvh - max(var(--ui-space-4), var(--native-titlebar-height, 0px)) - var(--ui-space-4));
+  max-height: calc(100dvh - 2 * var(--ui-space-4));
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--ds-bg-primary);
+  border-radius: var(--radius-md);
+  box-shadow: var(--ds-shadow-dialog);
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+
+.html-artifact-surface::backdrop,
+.html-artifact-image-dialog::backdrop { background: var(--ds-scrim); }
+
+.html-artifact-surface[open] .html-artifact-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.html-artifact-surface[open] .html-artifact-controls,
+.html-artifact-image-dialog .html-artifact-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-2);
+  background: var(--ds-bg-elevated-opaque);
+}
+
+.html-artifact[data-expanded="true"] .html-artifact-expand,
+.html-artifact:not([data-state="ready"]) .html-artifact-expand { display: none; }
+
+.html-artifact[data-state="loading"] .html-artifact-frame { visibility: hidden; }
 
 .html-artifact-loading {
   min-height: 32px;
@@ -28,14 +114,35 @@
   font-size: var(--text-sm-plus, 12.5px);
 }
 
-.html-artifact[data-state="ready"] .html-artifact-loading {
-  display: none;
+.html-artifact[data-state="ready"] .html-artifact-loading { display: none; }
+.html-artifact[data-state="error"] .html-artifact-loading { color: var(--ds-error); }
+.html-artifact-retry { flex: 0 0 auto; }
+.html-artifact-notice { font-size: var(--text-sm); color: var(--ds-text-secondary); }
+.html-artifact-notice[hidden] { display: none; }
+
+.html-artifact-image-dialog {
+  width: calc(100vw - 2 * var(--ui-space-4));
+  height: calc(100dvh - 2 * var(--ui-space-4));
+  max-width: 1176px;
+  max-height: calc(100dvh - 2 * var(--ui-space-4));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--ds-bg-primary);
+  color: var(--ds-text-primary);
+  box-shadow: var(--ds-shadow-dialog);
+  overflow: hidden;
+  -webkit-app-region: no-drag;
 }
 
-.html-artifact[data-state="error"] .html-artifact-loading {
-  color: var(--ds-error);
+.html-artifact-image-dialog[open] { display: flex; flex-direction: column; }
+.html-artifact-image-viewport { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.html-artifact-image-viewport img { display: block; max-width: none; margin: auto; }
+
+@media (pointer: coarse), (hover: none) {
+  .html-artifact-expand { opacity: 1; pointer-events: auto; }
 }
 
-.html-artifact-retry {
-  flex: 0 0 auto;
+@media (prefers-reduced-motion: reduce) {
+  .html-artifact-expand { transition: none; }
 }
