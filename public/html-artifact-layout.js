@@ -65,27 +65,74 @@ export function createHtmlArtifactResizeController({ view = globalThis.window, a
 
 /** Near-viewport lazy-mount/activity signal, NOT a second resource owner.
  * C decides when to mount and sends the visibility envelope to an existing frame.
- * No IO fallback guesses from zero-sized jsdom rectangles; old browsers retain
- * eager mount while document/ancestor visibility still pauses existing frames.
+ * IO remains the primary signal; after a stale non-intersection sample, a measured
+ * nonzero rect can recover a target moved into the 600px prewarm band. Zero-sized
+ * jsdom rectangles never guess. Old browsers retain eager mount while
+ * document/ancestor visibility still pauses existing frames.
  */
 export function createHtmlArtifactVisibilityController({ node, onVisibility, document: doc = node?.ownerDocument } = {}) {
   const view = doc?.defaultView;
   if (!node || !view) return { refresh() {}, dispose() {} };
-  let disposed = false, last = null, queued = null;
+  const prewarmMargin = 600, geometryRecheckInterval = 80, maxGeometryRechecks = 8;
+  let disposed = false, last = null, queued = null, geometryTimer = null, geometryRechecks = 0;
   let nearby = typeof view.IntersectionObserver !== 'function';
+  function measuredNearby() {
+    if (typeof node.getBoundingClientRect !== 'function') return false;
+    let rect;
+    try { rect = node.getBoundingClientRect(); } catch { return false; }
+    const width = Number(view.innerWidth || doc.documentElement?.clientWidth);
+    const height = Number(view.innerHeight || doc.documentElement?.clientHeight);
+    if (!rect || ![rect.left, rect.right, rect.top, rect.bottom, rect.width, rect.height, width, height].every(Number.isFinite)
+      || rect.width <= 0 || rect.height <= 0 || width <= 0 || height <= 0) return false;
+    if (rect.right < 0 || rect.left > width || rect.bottom < -prewarmMargin || rect.top > height + prewarmMargin) return false;
+    const bounds = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+    for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+      const style = view.getComputedStyle(parent);
+      for (const [axis, start, end] of [['X', 'left', 'right'], ['Y', 'top', 'bottom']]) {
+        const overflow = style[`overflow${axis}`] || style.overflow;
+        const scrolls = ['auto', 'scroll', 'overlay'].includes(overflow);
+        if (!scrolls && !['hidden', 'clip'].includes(overflow)) continue;
+        const clip = parent.getBoundingClientRect();
+        if (![clip[start], clip[end]].every(Number.isFinite) || clip[end] <= clip[start]) return false;
+        // Overflow alone does not make clipped negative-offset content reachable.
+        const margin = scrolls && axis === 'Y' && parent.clientHeight > 0
+          && parent.scrollHeight > parent.clientHeight ? prewarmMargin : 0;
+        if (bounds[end] < clip[start] - margin || bounds[start] > clip[end] + margin) return false;
+        // Project the prewarmed fragment onto its scrollport before testing
+        // outer clips. A shell clip must not erase an inner scrollport's band;
+        // a hidden/clip ancestor inside that scrollport is never expanded.
+        bounds[start] = Math.max(clip[start], Math.min(clip[end], bounds[start]));
+        bounds[end] = Math.max(clip[start], Math.min(clip[end], bounds[end]));
+      }
+    }
+    return true;
+  }
   function visible() {
-    if (!node.isConnected || doc.hidden || !nearby || node.closest('[hidden]')) return false;
+    if (!node.isConnected || doc.hidden || node.closest('[hidden]')) return false;
     for (let parent = node; parent; parent = parent.parentElement) {
       const style = view.getComputedStyle(parent);
       if (style.display === 'none' || style.visibility === 'hidden' || style.contentVisibility === 'hidden') return false;
       if (parent.tagName === 'DETAILS' && !parent.open && !parent.querySelector('summary')?.contains(node)) return false;
     }
-    return true;
+    return nearby || measuredNearby();
+  }
+  function stopGeometryRechecks() {
+    if (geometryTimer !== null) view.clearTimeout(geometryTimer);
+    geometryTimer = null; geometryRechecks = 0;
+  }
+  function scheduleGeometryRecheck() {
+    if (typeof view.IntersectionObserver !== 'function' || nearby || last === true
+      || geometryTimer !== null || geometryRechecks >= maxGeometryRechecks || disposed) return;
+    geometryTimer = view.setTimeout(() => {
+      geometryTimer = null; geometryRechecks++;
+      refresh();
+    }, geometryRecheckInterval);
   }
   function refresh() {
     if (disposed) return;
     const next = visible();
     if (next !== last) { last = next; onVisibility?.(next); }
+    if (next) stopGeometryRechecks(); else scheduleGeometryRecheck();
   }
   function schedule() {
     if (queued !== null || disposed) return;
@@ -95,7 +142,7 @@ export function createHtmlArtifactVisibilityController({ node, onVisibility, doc
     ? new view.IntersectionObserver(entries => {
       for (const entry of entries) if (entry.target === node) nearby = entry.isIntersecting;
       refresh();
-    }, { rootMargin: '600px 0px' }) : null;
+    }, { rootMargin: `${prewarmMargin}px 0px` }) : null;
   intersection?.observe(node);
   const mutation = new view.MutationObserver(schedule);
   // Only this ancestor chain owns visibility; no subtree/per-artifact observers
@@ -103,7 +150,9 @@ export function createHtmlArtifactVisibilityController({ node, onVisibility, doc
   for (let parent = node; parent; parent = parent.parentElement) {
     mutation.observe(parent, { attributes: true, attributeFilter: ['hidden', 'style', 'class', 'open'] });
   }
+  doc.addEventListener('scroll', schedule, true);
   doc.addEventListener('visibilitychange', refresh);
+  view.addEventListener('resize', schedule);
   view.addEventListener('pageshow', refresh);
   refresh();
   return {
@@ -112,8 +161,10 @@ export function createHtmlArtifactVisibilityController({ node, onVisibility, doc
       if (disposed) return;
       disposed = true;
       if (queued !== null) view.cancelAnimationFrame(queued);
-      queued = null; intersection?.disconnect(); mutation.disconnect();
+      queued = null; intersection?.disconnect(); mutation.disconnect(); stopGeometryRechecks();
+      doc.removeEventListener('scroll', schedule, true);
       doc.removeEventListener('visibilitychange', refresh);
+      view.removeEventListener('resize', schedule);
       view.removeEventListener('pageshow', refresh);
     },
   };
