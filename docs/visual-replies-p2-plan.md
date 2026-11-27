@@ -70,7 +70,14 @@
 - B 首轮独立功能静态审查有条件通过：Blocker 0 / Important 0 / Nit 0，Pre-existing 范围差异 1；未实跑功能测试，七个主审文件在作者提交前后摘要变化 0/7，不能将作者数字冒称审查者实测。锁/GC/维护故障的首个独立安全审查执行因 `Claude API unknown.` 中断，仅有勘察、没有审查结论，不能记为通过或产品缺陷；已用新独立上下文对主集成树 B 产品重做同范围首轮审查，不扩大到 A/Electron，也不继承任何通过结论。
 - B2 最终作者证据：store 135/135 场景、529 assertions、另 skip 3；lock 14/14、103 assertions、skip 0；maintenance 20/20、119 assertions、skip 0；performance 默认 16/16 assertions、skip 0；相邻 storage metadata 1/1。原有断言未减少。其同口径性能新样本以 P1 `dfdc1dde` 为 before：三轮 6723.485/6898.081/6823.011ms，中位 6823.011；B2 三轮 3990.662/3735.489/3337.113ms，中位 3735.489。每轮历史 HTML 读取 268616500/268879092/269141684 B→65648 B；同 digest、64 份 33554496 B、8 sessions、每轮 8×4103 B、每侧 26 assertions。旧 5449.461→2627.149ms 仅为历史，不混用。Win/Linux gate 支持不代表 Linux 实机/网络共享存储已验证，其他 OS fail-closed。
 - B3 最终同树组合 backend/model/branches 为 63/63、exit 0、9216.1951ms；branches 17/17、372 实际断言、8623.2296ms，skip/fail/cancel/todo 0；相邻 target 20/20、service 49/49、HTTP 11/11。**该证据包含 B2 当前未提交产品树，不证明单独获取测试提交后的主集成树已通过**；必须取得 B2 产品提交后在主树补验。
-- B2 验收文档 `df866d7a` 集成为 `597d8335`；D2 验收文档 `081b32ea` 集成为 `20e67cfa`。E3 交付：canonical 362→366 叶（原 362 全保留、新增 4、删除/重复/换组 0），守卫 15/15；一次十六叶离线 Artifact 子链全部 exit 0（各套件计数详见 E 验收 §10）；测试链 `403e0cf9`，文档 `55c0b82f`。**完整 canonical 仍待当前 PR CI。**
+- B2 验收文档 `df866d7a` 集成为 `597d8335`；D2 验收文档 `081b32ea` 集成为 `20e67cfa`。E3 交付：canonical 362→366 叶（原 362 全保留、新增 4、删除/重复/换组 0），守卫 15/15；一次十六叶离线 Artifact 子链全部 exit 0（各套件计数详见 E 验收 §10）；测试链 `403e0cf9`；E3 文档经 BOM 重写后准确 SHA 为 `2134c58b`（首段）、`bdb1ad8a`（I1 补记）、`6648a15e`（E3 收尾，独占已解除）。**完整 canonical 仍待当前 PR CI。**
+
+### A2 交付与真实模型闭环勘察（父实证）
+
+- A2 命中模型服务 100 轮上限死亡前已提交两个测试提交，原树干净：`1c66c6b6`（真实 Pi 无模型契约）与 `f78e40a0`（普通 functional Electron 驱动 + 显式模型门控）。父按序集成为 `8cba3ad4`、`e02828f7`，扩展既有 check-driver canonical 叶；A2 新入口（functional offline/live、real-pi-contract）属独立 Electron/live 入口族，**暂未注册**进 366 叶默认链，登记另算。
+- 父在当前集成树实测：**check-driver 28/28**；**真实 Pi 无模型契约 13/13**（真实安装 pi 1.6.0，TEMP 会话，合成 assistant setup 明确非模型验收）；**离线 functional 17/18**——六类 artifact、JS 交互、多 artifact、会话切换清理全 PASS，唯一失败是 generate 阶段 **session-return 条件超时**（切回原会话时 artifact 未在时限内全部 ready；性质待定：会话 hydration 生命周期缺口或驱动过时，已交 C2 对照）。证据 `C:/Users/21022/AppData/Local/Temp/pi-visual-replies-wCQcf4/evidence/`。
+- **真实模型闭环（用户已批准用本机 magpie 网关，TEMP 会话、单次短 prompt）打通到真实生产级缺陷**：显式门控注入（pi.cmd、xingchiapi/gpt-6.1-sol、openai-responses、127.0.0.1:3425 网关，key 经专用 env 不落盘/不进证据）后 `normal-sandbox`/`production-preload`/`explicit-model-selected` 全 PASS，真实模型被选中并实际收到 prompt。但**生成开始即崩溃**：`server/html-artifact-projection.js:30` `node.type?.startsWith is not a function`，uncaught TypeError → backend exit 1 → SSE 断开 + pi 孤儿流产（会话记录 stopReason:aborted、durationMs 29、usage 全 0）。离线 fakePi 永不触发（合成 wire 的 type 皆字符串）——**fixture 形状偏离上游真实形状的盲区实例**。逐项排除实证：直接 pi probe（同 env/args/flags/扩展/shell 包装）全部成功完成生成，唯一失败路径是生产 backend 进程内。repro 脚本 `C:/Users/21022/AppData/Local/Temp/pi-probe-shell/backend-repro.cjs` 可重复（exit 1、完整堆栈）。证据 `C:/Users/21022/AppData/Local/Temp/pi-visual-replies-ElQgvm/`（含 generate-first-failure.png 显示后端断开）。**已交 B4b 修复（含 I1），模型闭环在修复后重跑**；A2 的驱动本身证明可用，不需重写。
+- 探查过程另确认：gateway 拒绝非编程客户端 UA（client_not_allowed），但 pi 原生 UA 与凭据可用；key 为 6 字符本地标记，全程未打印/未落证据。
 
 ### R-B 首轮独立安全审查（重试后完成）
 
