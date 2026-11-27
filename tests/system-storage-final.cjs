@@ -104,6 +104,53 @@ test('P5 execution history index is a validated, byte-exact cold-migration busin
   await unchanged(file, original);
 });
 
+test('immutable HTML artifact snapshots cold-migrate byte-exactly without interpreting HTML', async t => {
+  const w = await fixture(t);
+  const { createHtmlArtifactStore } = await import('../server/html-artifact-store.js');
+  const store = createHtmlArtifactStore({ dataDir: w.source });
+  const html = '<!doctype html><script>parent.document.title="must stay inert during migration"</script>\n';
+  const artifact = await store.publish({ sessionId: 'session-fixture', messageId: 'message-fixture',
+    toolCallId: 'call-fixture', title: '报告', html });
+  const relative = path.join('html-artifacts', artifact.id);
+  const original = Object.fromEntries(await Promise.all(['document.html', 'reference.json', '.pending']
+    .map(async name => [name, await fs.readFile(path.join(w.source, relative, name))])));
+  const originalHtml = await witness(path.join(w.source, relative, 'document.html'));
+  assert.equal(original['document.html'].toString('utf8'), html);
+  assert.deepEqual((await fs.readdir(path.join(w.source, relative))).sort(), ['.pending', 'document.html', 'reference.json']);
+  const core = await w.open();
+  const preview = succeeds(await core.preview(w.target));
+  assert.ok(preview.summary.included.includes('html-artifacts'));
+  assert.equal(preview.summary.files, 5);
+  assert.equal(preview.summary.directories, 2);
+  const saved = succeeds(await core.commit({ ticket: preview.ticket, confirm: true }));
+  succeeds(await core.arm({ transactionId: saved.intentId }));
+  succeeds(await core.runPendingCold(STOPPED));
+  for (const [name, bytes] of Object.entries(original)) {
+    assert.deepEqual(await fs.readFile(path.join(w.target, relative, name)), bytes);
+  }
+  const restored = await createHtmlArtifactStore({ dataDir: w.target }).read(artifact.id);
+  assert.equal(restored.artifact.id, artifact.id);
+  assert.equal(restored.html, html);
+  await unchanged(path.join(w.source, relative, 'document.html'), originalHtml);
+});
+
+test('HTML artifact migration rejects unfinished locks, temp paths and unknown files', async t => {
+  const invalid = [
+    ['html-artifacts/.writer.lock', ''],
+    ['html-artifacts/.tmp-00000000-0000-0000-0000-000000000000', ''],
+    [`html-artifacts/${'a'.repeat(64)}/payload.bin`, 'opaque'],
+  ];
+  for (const [relative, value] of invalid) await t.test(relative, async sub => {
+    const w = await fixture(sub);
+    await w.write(relative, value);
+    const core = await w.open();
+    const code = relative.includes('.writer.lock') || relative.includes('.tmp-') ? 'unknown_transaction' : 'unknown_data';
+    refuses(await core.preview(w.target), code);
+    assert.deepEqual(await fs.readdir(w.target), []);
+    await assert.rejects(fs.stat(w.boot), { code: 'ENOENT' });
+  });
+});
+
 test('malformed, noncanonical, future and oversized P5 indices fail closed before migration', async t => {
   const schema = require('../lib/execution-timeline-schema.cjs');
   const { MAX_EXECUTION_TIMELINE_BYTES } = require('../electron/system-storage-inventory.cjs');

@@ -11,7 +11,7 @@ const FILES = new Set([
   'conversations.json', 'mcp-market-sources.json', 'mcp-registry-catalog.json.gz', 'environment.json',
   'provider-management.json', 'worktrees.json', 'execution-timeline.json',
 ]);
-const DIRECTORIES = new Set(['plans', 'planner-sessions', 'trash-sessions', 'review-comments', 'collab-documents', '.uploads']);
+const DIRECTORIES = new Set(['plans', 'planner-sessions', 'trash-sessions', 'review-comments', 'collab-documents', '.uploads', 'html-artifacts']);
 const OWNED = new Map([...FILES].map(name => [name, 'file']).concat([...DIRECTORIES].map(name => [name, 'directory'])));
 const BOOT_FILE = 'system-storage-bootstrap.json';
 const BOOT_TEMP = /^\.system-storage-bootstrap-[a-f0-9-]{36}\.tmp$/u;
@@ -49,8 +49,13 @@ function classifyTop(name, mixed, destination) {
 }
 
 function classifyChild(store, name, depth, candidateIsDirectory) {
-  if (store !== '.uploads' && TRANSACTION.test(name)) fail('unknown_transaction');
+  const htmlPendingMarker = store === 'html-artifacts' && depth === 2 && name === '.pending';
+  if (store !== '.uploads' && !htmlPendingMarker && TRANSACTION.test(name)) fail('unknown_transaction');
   switch (store) {
+    case 'html-artifacts':
+      if (depth === 1 && candidateIsDirectory && /^[a-f0-9]{64}$/u.test(name)) return 'directory';
+      if (depth === 2 && !candidateIsDirectory && ['document.html', 'reference.json', '.pending'].includes(name)) return 'file';
+      return null;
     case '.uploads': return depth === 1 ? 'file' : null;
     case 'plans': return depth === 1 && /^[a-z0-9_-]+\.json$/iu.test(name) ? 'file' : null;
     case 'review-comments': case 'collab-documents': return depth === 1 && /^[a-f0-9]{64}\.json$/u.test(name) ? 'file' : null;

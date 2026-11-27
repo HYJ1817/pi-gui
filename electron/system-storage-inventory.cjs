@@ -6,7 +6,10 @@ const { createHash } = require('node:crypto');
 const { fail, componentOK, dirIdentity, fileStamp, hashRows, MAX_PATH } = require('./system-storage-fs.cjs');
 const { classifyTop, classifyChild } = require('./system-storage-policy.cjs');
 
-const MAX_ENTRIES = 12_000;
+// The HTML artifact store permits 4,096 immutable snapshots; each contributes
+// one directory and up to three fixed files (including its pending marker).
+// Keep this migration bound above that full, valid inventory plus other stores.
+const MAX_ENTRIES = 20_000;
 const MAX_BYTES = 16 * 1024 ** 3;
 const MAX_FILE_BYTES = 2 * 1024 ** 3;
 let executionTimelineSchema;
