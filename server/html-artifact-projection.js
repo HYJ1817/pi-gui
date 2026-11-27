@@ -27,7 +27,9 @@ export function projectHtmlArtifacts(value, toolName = null) {
       return { role: 'toolResult', toolName: HTML_RENDER_TOOL, toolCallId: node.toolCallId,
         ...(typeof node.timestamp === 'number' ? { timestamp: node.timestamp } : {}), ...projectHtmlToolResult(node) };
     }
-    const execution = node.type?.startsWith('tool_execution_');
+    // Real Pi wire events can carry non-string type payloads in nested nodes
+    // (for example object-valued content parts); fail closed as non-execution.
+    const execution = typeof node.type === 'string' && node.type.startsWith('tool_execution_');
     // A legacy nameless completion must use the start-bound name. With no
     // witness, hide payload rather than accidentally publishing an HTML error.
     const name = node.toolName || (node === value ? toolName : null);
