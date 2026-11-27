@@ -14,7 +14,7 @@ async function launch() {
   if (process.platform !== 'win32') throw Error('Windows desktop required; not run');
   const world = h.createWorld(); h.prepareProjects(world);
   const env = { ...h.childEnvironment(world), PI_BIN: h.prepareFakePi(world), PORT: String(await h.freePort()),
-    ARTIFACT_VIEWER_OBSERVER: '1' };
+    ARTIFACT_VIEWER_OBSERVER: '1', ARTIFACT_VIEWER_SOURCE_MANIFEST: process.env.ARTIFACT_VIEWER_SOURCE_MANIFEST || '' };
   const exe = require('electron');
   console.log('Viewer UI evidence: ' + path.join(world, 'evidence'));
   const child = spawn(exe, [__filename, '--user-data-dir=' + path.join(world, 'profile'), '--disable-background-networking'],
@@ -40,12 +40,19 @@ async function observe() {
   const world = h.validateWorld(process.env.VISUAL_REPLIES_WORLD, process.env.VISUAL_REPLIES_TEMP_ROOT);
   for (const [name, directory] of Object.entries({ home: 'home', appData: 'appdata', userData: 'profile', sessionData: 'profile', temp: 'tmp', logs: 'logs' })) app.setPath(name, path.join(world, directory));
   const file = path.join(world, 'evidence/viewer.json');
-  const report = { completed: false, checks: [], shots: [], identity: { head: h.git(h.ROOT, 'rev-parse', 'HEAD'),
-    changed: h.git(h.ROOT, 'diff', '--name-only').split('\n').filter(Boolean), electron: process.versions.electron,
+  const manifest = process.env.ARTIFACT_VIEWER_SOURCE_MANIFEST
+    ? JSON.parse(fs.readFileSync(process.env.ARTIFACT_VIEWER_SOURCE_MANIFEST, 'utf8')) : null;
+  const report = { completed: false, checks: [], shots: [], startedAt: new Date().toISOString(), identity: {
+    head: manifest?.dHead || h.git(h.ROOT, 'rev-parse', 'HEAD'),
+    changed: manifest?.owned || h.git(h.ROOT, 'diff', '--name-only').split('\n').filter(Boolean), manifest,
+    electron: process.versions.electron, chrome: process.versions.chrome,
     platform: process.platform, entry: 'unmodified-production-main-with-benign-renderer-read-fixture',
     securityAcceptance: false, realPiOrModel: false,
     sourceDigests: Object.fromEntries(['public/html-artifact-viewer.js', 'public/html-artifact-dialog.js', 'public/html-artifact-controls.js',
-      'public/html-artifact-interactions.js', 'public/html-artifact.css', 'public/html-artifact-frame.js'].map(name => [name, h.digest(path.join(h.ROOT, name))])) } };
+      'public/html-artifact-interactions.js', 'public/html-artifact.css', 'public/html-artifact-frame.js',
+      'public/html-artifact-layout.js', 'public/html-artifact-measure.js', 'public/html-artifact-runtime.js',
+      'public/html-artifact-scroll.js', 'public/html-artifact-theme.js', 'public/reading-position.js',
+      'tests/html-artifact-viewer-electron.cjs'].map(name => [name, h.digest(path.join(h.ROOT, name))])) } };
   let win, stage = 'production-main';
   const save = () => h.saveJson(file, report);
   const check = (id, pass, facts) => { report.checks.push({ id, pass: Boolean(pass), facts }); save(); if (!pass) throw Error(id); };
@@ -82,30 +89,42 @@ async function observe() {
     await win.webContents.debugger.sendCommand('Page.bringToFront');
     await until(() => read(async () => { const { S } = await import('/state.js'); return Boolean(S.legacyOwner?.sessionId && S.thread && window.piGuiDesktop?.isDesktop); }), 'ready');
     const prefs = win.webContents.getLastWebPreferences();
+    report.runtime = { sandbox: prefs.sandbox, contextIsolation: prefs.contextIsolation, nodeIntegration: prefs.nodeIntegration,
+      webSecurity: prefs.webSecurity, switches: process.argv.filter(arg => arg.startsWith('--')) };
     check('normal-production-preferences', prefs.sandbox === true && prefs.contextIsolation === true && prefs.nodeIntegration === false
-      && !app.commandLine.hasSwitch('no-sandbox') && !app.commandLine.hasSwitch('disable-web-security'));
+      && prefs.webSecurity !== false && !app.commandLine.hasSwitch('no-sandbox') && !app.commandLine.hasSwitch('disable-web-security'));
+    win.webContents.on('render-process-gone', (_event, detail) => { report.rendererGone = detail.reason; save(); });
     stage = 'mount-benign-viewer';
     await read(async () => {
       const { S } = await import('/state.js');
       const { createHtmlArtifactViewer } = await import('/html-artifact-viewer.js');
-      const html = '<style>section{padding:20px}h2{font-size:20px}input,button{font:inherit;padding:8px}table{border-collapse:collapse;width:100%}td{padding:10px;border-bottom:1px solid var(--border)}img{width:120px;image-rendering:pixelated}</style>'
+      const html = '<style>section{padding:20px;min-height:12000px}h2{font-size:20px}input,button{font:inherit;padding:8px}table{border-collapse:collapse;width:100%}td{padding:10px;border-bottom:1px solid var(--border)}img{width:120px;image-rendering:pixelated}</style>'
         + '<section><h2>交互报告 · Interactive report</h2><p>正常离线 fixture / state, focus and responsive layout</p>'
         + '<input id="entry" aria-label="备注" value="保留输入 state"><button id="count">0</button>'
         + '<details><summary>展开更多行 / Details</summary><p>' + '更多信息 '.repeat(80) + '</p></details>'
         + '<img alt="离线 raster" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJ1sAAAAASUVORK5CYII=">'
-        + '<table>' + Array.from({ length: 90 }, (_, i) => '<tr><td>Row ' + (i + 1) + '</td><td>良性长表 / preserved scroll</td></tr>').join('') + '</table></section>'
+        + '<table>' + Array.from({ length: 270 }, (_, i) => '<tr><td>Row ' + (i + 1) + '</td><td>良性长表 / preserved scroll</td></tr>').join('') + '</table></section>'
         + '<script>window.fixtureIdentity=Math.random();document.querySelector("#count").onclick=function(){this.textContent=String(Number(this.textContent)+1)}</script>';
       const hash = async value => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(x => x.toString(16).padStart(2, '0')).join('');
       const id = await hash('C benign viewer fixture');
       const ref = { schemaVersion: 1, kind: 'html', id, contentRef: id, title: '交互报告 / Interactive report', sessionId: S.legacyOwner.sessionId,
         messageId: 'C-fixture', toolCallId: 'C-call', height: 320, createdAt: new Date().toISOString(), bytes: new TextEncoder().encode(html).length, digest: await hash(html) };
       const viewer = createHtmlArtifactViewer(ref, { scope: { conversationId: 'classic-chat', owner: S.legacyOwner }, fetcher: async () => ({ ok: true, artifact: ref, html }) });
-      S.thread.append(viewer.node); viewer.mount(); window.fixtureViewer = viewer;
+      S.thread.append(viewer.node); viewer.mount(); window.fixtureViewer = viewer; window.fixtureReference = ref;
     });
     await until(() => read(() => document.querySelector('.html-artifact')?.dataset.state === 'ready'), 'artifact');
     const child = win.webContents.mainFrame.frames.find(frame => frame.name === 'pi-gui-html-artifact');
     if (!child) throw Error('no-artifact-frame');
     const childRead = code => child.executeJavaScript(code);
+    await until(() => read(() => document.querySelector('.html-artifact-frame').style.height === '4096px'), 'long-inline-cap');
+    check('long-content-over-4096', await childRead('document.body.getBoundingClientRect().height >= 12000'));
+    await read(() => {
+      window.viewerPresentations = [];
+      addEventListener('message', event => {
+        if (event.source === document.querySelector('.html-artifact iframe')?.contentWindow && event.data?.type === 'presentation-ready')
+          window.viewerPresentations.push({ expanded: event.data.expanded, sequence: event.data.sequence });
+      });
+    });
     const state = () => childRead('({identity:window.fixtureIdentity,input:document.querySelector("#entry").value,count:document.querySelector("#count").textContent,scroll:scrollY})');
     await childRead('document.querySelector("#entry").value="用户输入 retained";document.querySelector("#count").click()');
     const before = await state();
@@ -114,10 +133,18 @@ async function observe() {
     for (const theme of ['dark', 'light']) for (const [label, width, height] of [['wide', 1320, 820], ['narrow', 700, 600]]) {
       win.setContentSize(width, height); await read(async mode => (await import('/theme.js')).setThemePreference(mode), theme);
       await h.sleep(250);
+      await read(() => document.querySelector('.html-artifact').scrollIntoView({ block: 'start' }));
+      await until(() => read(() => document.querySelector('.html-artifact-expand').getAttribute('aria-busy') !== 'true'), 'inline-restored');
+      await childRead('scrollTo({top:7904,left:0,behavior:"instant"})');
+      const reading = await state(); check('inline-reading-' + theme + '-' + label, reading.scroll === 7904, reading);
       await shot('inline-' + theme + '-' + label);
       await click('.html-artifact-expand');
       await until(() => read(() => document.querySelector('.html-artifact-surface').open), 'expanded');
       await h.sleep(150); await shot('expanded-' + theme + '-' + label);
+      const saved = await read(() => window.viewerPresentations.at(-1));
+      const expandedReading = await state();
+      check('expanded-reading-' + theme + '-' + label, saved?.expanded === true && expandedReading.scroll === 0
+        && await read(() => parseFloat(document.querySelector('.html-artifact-frame').style.height) >= 12000), { saved, scroll: expandedReading.scroll });
       const facts = await read(() => { const d = document.querySelector('.html-artifact-surface'), r = d.getBoundingClientRect(); return { width: r.width, height: r.height, left: r.left, top: r.top, scrollHeight: d.querySelector('.html-artifact-viewport').scrollHeight, viewportHeight: d.querySelector('.html-artifact-viewport').clientHeight }; });
       check('dialog-bounds-' + theme + '-' + label, facts.left >= 0 && facts.top >= 0 && facts.width <= width && facts.height <= height && facts.scrollHeight > facts.viewportHeight, facts);
       await click('.html-artifact-surface [aria-label="放大"]');
@@ -126,27 +153,92 @@ async function observe() {
       if (theme === 'dark' && label === 'wide') await shot('zoom-125-dark-wide');
       await key('Escape'); await until(() => read(() => !document.querySelector('.html-artifact-surface').open), 'closed');
       check('return-focus-' + theme + '-' + label, await read(() => document.activeElement === document.querySelector('.html-artifact-expand')));
-      const after = await state(); check('same-realm-' + theme + '-' + label, after.identity === before.identity && after.input === before.input && after.count === before.count, { retained: true });
+      await until(() => read(() => document.querySelector('.html-artifact-expand').getAttribute('aria-busy') !== 'true'), 'restore-ACK');
+      const after = await state();
+      check('restored-reading-' + theme + '-' + label, after.scroll === reading.scroll
+        && (await read(() => window.viewerPresentations.at(-1)))?.expanded === false, { before: reading.scroll, expanded: expandedReading.scroll, after: after.scroll });
+      await shot('restored-' + theme + '-' + label);
+      check('same-realm-' + theme + '-' + label, after.identity === before.identity && after.input === before.input && after.count === before.count, { retained: true });
     }
     stage = 'iframe-escape-and-tab';
     await click('.html-artifact-expand');
+    await until(() => read(() => document.querySelector('.html-artifact-surface').open), 'iframe-key-expanded');
     await childRead('document.querySelector("#entry").focus()');
     await key('Escape'); await until(() => read(() => !document.querySelector('.html-artifact-surface').open), 'iframe-escape');
     check('escape-from-focused-frame', true);
+    await until(() => read(() => document.querySelector('.html-artifact-expand').getAttribute('aria-busy') !== 'true'), 'key-restored');
     await click('.html-artifact-expand');
+    await until(() => read(() => document.querySelector('.html-artifact-surface').open), 'tab-expanded');
     await key('Tab');
+    // Opaque-frame focus propagates across renderer processes after input ACK.
+    await until(() => read(() => document.querySelector('.html-artifact-surface').contains(document.activeElement)), 'tab-focus-settled');
     const next = await read(() => document.activeElement.tagName);
     check('tab-cannot-reach-background', await read(() => document.querySelector('.html-artifact-surface').contains(document.activeElement)), { tag: next });
     await key('Tab', 8);
+    await until(() => read(() => document.querySelector('.html-artifact-surface').contains(document.activeElement)), 'reverse-tab-focus-settled');
     check('reverse-tab-stays-modal', await read(() => document.querySelector('.html-artifact-surface').contains(document.activeElement)));
     stage = 'dispose';
     await read(() => window.fixtureViewer.dispose());
     check('dispose-closes-native-dialog', await read(() => !document.querySelector('.html-artifact-surface').open && !document.querySelector('.html-artifact iframe')));
+    stage = 'viewport-feedback';
+    await read(async () => {
+      window.fixtureViewer.node.remove();
+      const { createHtmlArtifactViewer } = await import('/html-artifact-viewer.js');
+      const { S } = await import('/state.js');
+      // Register before this viewer's listener: message is delivered at Window,
+      // so a late stopImmediatePropagation listener cannot undo its consumption.
+      window.dropSaveACK = false; window.droppedSaveACKs = 0;
+      window.filterSaveACK = event => {
+        if (window.dropSaveACK && event.source === document.querySelector('.html-artifact iframe')?.contentWindow
+          && event.data?.type === 'presentation-ready' && event.data.expanded === true) {
+          window.droppedSaveACKs++; event.stopImmediatePropagation();
+        }
+      };
+      addEventListener('message', window.filterSaveACK);
+      const html = '<div style="height:calc(100vh + 10px);padding:20px">Viewport-relative / 视口反馈保持</div>';
+      const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(html)))].map(x => x.toString(16).padStart(2, '0')).join('');
+      const ref = { ...window.fixtureReference, bytes: new TextEncoder().encode(html).length, digest };
+      const viewer = createHtmlArtifactViewer(ref, { scope: { conversationId: 'classic-chat', owner: S.legacyOwner },
+        fetcher: async () => ({ ok: true, artifact: ref, html }) });
+      S.thread.append(viewer.node); viewer.mount(); window.fixtureViewer = viewer;
+    });
+    await until(() => read(() => document.querySelector('.html-artifact')?.dataset.state === 'ready'), 'viewport-ready');
+    for (const theme of ['dark', 'light']) for (const [label, width, height] of [['wide', 1320, 820], ['narrow', 700, 600]]) {
+      win.setContentSize(width, height); await read(async mode => (await import('/theme.js')).setThemePreference(mode), theme);
+      await read(() => document.querySelector('.html-artifact').scrollIntoView({ block: 'start' }));
+      await until(() => read(() => document.querySelector('.html-artifact-expand').getAttribute('aria-busy') !== 'true'), 'viewport-inline');
+      await click('.html-artifact-expand');
+      await until(() => read(() => document.querySelector('.html-artifact-surface').open), 'viewport-expanded');
+      await h.sleep(600);
+      const early = await read(() => document.querySelector('.html-artifact-frame').style.height);
+      await h.sleep(1300);
+      const late = await read(() => document.querySelector('.html-artifact-frame').style.height);
+      check('viewport-feedback-stable-' + theme + '-' + label, early === late && parseFloat(late) < 1000, { early, late });
+      await shot('viewport-expanded-' + theme + '-' + label);
+      await key('Escape');
+      await until(() => read(() => !document.querySelector('.html-artifact-surface').open
+        && document.querySelector('.html-artifact-expand').getAttribute('aria-busy') !== 'true'), 'viewport-restored');
+    }
+    stage = 'no-save-ACK';
+    await read(() => { window.dropSaveACK = true; });
+    await h.sleep(350); // Let the last inline width measurement settle first.
+    const inlineGeometry = await read(() => { const f = document.querySelector('.html-artifact-frame'); return { width: f.style.width, height: f.style.height }; });
+    await click('.html-artifact-expand'); await h.sleep(1400);
+    const timeoutGeometry = await read(() => { const f = document.querySelector('.html-artifact-frame'); return { width: f.style.width, height: f.style.height, open: document.querySelector('.html-artifact-surface').open }; });
+    const dropped = await read(() => window.droppedSaveACKs);
+    check('save-ACK-timeout-keeps-inline-geometry', dropped === 1 && !timeoutGeometry.open && timeoutGeometry.width === inlineGeometry.width
+      && timeoutGeometry.height === inlineGeometry.height, { inlineGeometry, timeoutGeometry, dropped });
+    await shot('save-ACK-timeout-inline');
+    await read(() => { removeEventListener('message', window.filterSaveACK); window.fixtureViewer.dispose(); });
     report.completed = true;
   } catch (error) {
     report.failure = { stage, code: String(error.message).slice(0, 100) };
+    if (win && !win.isDestroyed()) try { await shot('first-failure'); } catch { report.failureScreenshot = 'unavailable'; }
   } finally {
     if (win) try { await read(async () => { const { S } = await import('/state.js'); if (S.legacyOwner) await fetch('/api/runtime-sessions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Pi-Gui-Owner': JSON.stringify(S.legacyOwner) }, body: JSON.stringify({ action: 'close', owner: S.legacyOwner }) }); }); } catch { report.ownerCleanup = 'unconfirmed'; }
+    report.endedAt = new Date().toISOString();
+    report.durationMs = Date.parse(report.endedAt) - Date.parse(report.startedAt);
+    report.sourceChanged = Object.entries(report.identity.sourceDigests).filter(([name, digest]) => h.digest(path.join(h.ROOT, name)) !== digest).map(([name]) => name);
     save(); app.quit();
   }
 }

@@ -80,6 +80,26 @@ function message(s, frame, type, extra = {}, overrides = {}) {
     data: { schemaVersion: 1, id: frame.closest('.html-artifact')?.dataset.artifactId, nonce, type, ...extra }, ...overrides }));
 }
 
+// D2's exact envelope over asynchronous transport. Real native scroll/rAF is
+// proved separately in Electron, not by this state-machine fixture.
+function presentation(s, frame, automatic = true) {
+  const sent = [];
+  frame.contentWindow.postMessage = (value, origin) => {
+    if (value.type !== 'presentation') return;
+    sent.push({ ...value });
+    assert.equal(origin, '*');
+    assert.deepEqual(Object.keys(value).sort(), ['expanded', 'id', 'nonce', 'schemaVersion', 'sequence', 'type']);
+    if (automatic) queueMicrotask(() => message(s, frame, 'presentation-ready', {
+      expanded: value.expanded, sequence: value.sequence,
+    }));
+  };
+  return sent;
+}
+async function expandViewer(s, viewer) {
+  presentation(s, viewer.node.querySelector('iframe'));
+  viewer.node.querySelector('.html-artifact-expand').click(); await tick();
+}
+
 test('closed history projections make sibling artifact boundaries without executing Markdown or retaining HTML', async () => {
   const { planHistory } = await import('../public/tool-history.js');
   const { timelineFromMessages } = await import('../public/runtime-timeline.js');
@@ -277,7 +297,7 @@ test('inline dialog preserves the frame and registration through full screen and
   const s = surface(t), viewer = mounted(s); await tick(); await tick();
   const frame = viewer.node.querySelector('iframe'), source = frame.srcdoc;
   const expand = viewer.node.querySelector('.html-artifact-expand');
-  message(s, frame, 'ready'); expand.focus(); expand.click();
+  message(s, frame, 'ready'); expand.focus(); await expandViewer(s, viewer);
   const dialog = viewer.node.querySelector('dialog');
   assert.equal(dialog.open, true); assert.equal(dialog.getAttribute('aria-modal'), 'true');
   assert.equal(expand.getAttribute('aria-expanded'), 'true');
@@ -300,12 +320,12 @@ test('artifact dialogs are independent, close their prior sibling, and dispose e
   const one = mounted(s, a), two = mounted(s, b); await tick(); await tick();
   const first = one.node.querySelector('iframe'), second = two.node.querySelector('iframe');
   message(s, first, 'ready'); message(s, second, 'ready');
-  one.node.querySelector('.html-artifact-expand').click();
-  two.node.querySelector('.html-artifact-expand').click();
+  await expandViewer(s, one);
+  await expandViewer(s, two);
   assert.equal(one.node.querySelector('dialog').open, false);
   assert.equal(two.node.querySelector('dialog').open, true);
   message(s, first, 'escape'); assert.equal(two.node.querySelector('dialog').open, true);
-  message(s, second, 'resize', { height: 4096, naturalHeight: 9000, naturalWidth: 728, capped: true });
+  message(s, second, 'resize', { height: 4096, naturalHeight: 9000, naturalWidth: 728, capped: true, feedback: false });
   await new Promise(resolve => setTimeout(resolve, 135));
   assert.equal(second.style.height, '9000px'); assert.equal(two.node.dataset.capped, 'true');
   two.dispose(); two.dispose();
@@ -328,7 +348,7 @@ test('a valid link uses the host confirmation, not the frame nonce, before the e
   message(s, frame, 'link', { href: 'https://example.invalid/report' });
   assert.equal(s.d.querySelector('#confirmLayer').hidden, true); assert.equal(opened.length, 0);
   Object.defineProperty(s.w.navigator, 'userActivation', { value: { isActive: true } });
-  viewer.node.querySelector('.html-artifact-expand').click(); frame.focus();
+  await expandViewer(s, viewer); frame.focus();
   message(s, frame, 'link', { href: 'https://example.invalid/report' }); await tick();
   assert.equal(viewer.node.querySelector('dialog').open, false);
   assert.equal(s.d.querySelector('#confirmLayer').hidden, false); assert.equal(opened.length, 0);
@@ -366,11 +386,128 @@ test('bounded raster images open a separate host image element and clear on disp
 test('expanded sizes stay bounded and return to the v1 capped inline viewport', async t => {
   const s = surface(t), viewer = mounted(s); await tick(); await tick();
   const frame = viewer.node.querySelector('iframe'); message(s, frame, 'ready');
-  message(s, frame, 'resize', { height: 4096, naturalHeight: 1000000, naturalWidth: 728, capped: true });
+  message(s, frame, 'resize', { height: 4096, naturalHeight: 1000000, naturalWidth: 728, capped: true, feedback: false });
   await new Promise(resolve => setTimeout(resolve, 135));
   assert.equal(frame.style.height, '4096px');
-  viewer.node.querySelector('.html-artifact-expand').click(); assert.equal(frame.style.height, '65536px');
+  await expandViewer(s, viewer); assert.equal(frame.style.height, '65536px');
   viewer.node.querySelector('[aria-label="关闭全屏"]').click(); assert.equal(frame.style.height, '4096px');
+});
+
+test('expanded feedback holds calc(100vh + 10px) telemetry and respects old v1', async t => {
+  const s = surface(t), viewer = mounted(s); await tick(); await tick();
+  const frame = viewer.node.querySelector('iframe'); message(s, frame, 'ready');
+  message(s, frame, 'resize', { height: 330, naturalHeight: 340, feedback: true });
+  await new Promise(resolve => setTimeout(resolve, 135));
+  await expandViewer(s, viewer); assert.equal(frame.style.height, '330px');
+  for (const naturalHeight of [350, 380, 470, 1000000]) {
+    message(s, frame, 'resize', { height: 330, naturalHeight, feedback: true });
+    await new Promise(resolve => setTimeout(resolve, 135));
+    assert.equal(frame.style.height, '330px');
+  }
+  message(s, frame, 'resize', { height: 600, naturalHeight: 12000, feedback: false });
+  await new Promise(resolve => setTimeout(resolve, 135)); assert.equal(frame.style.height, '12000px');
+  message(s, frame, 'resize', { height: 410, naturalHeight: 15000 });
+  await new Promise(resolve => setTimeout(resolve, 135)); assert.equal(frame.style.height, '410px');
+  message(s, frame, 'resize', { height: 999, naturalHeight: 20000, feedback: 'false' });
+  await new Promise(resolve => setTimeout(resolve, 135)); assert.equal(frame.style.height, '410px');
+});
+
+test('12000px geometry waits for save ACK and reopening waits for restore ACK', async t => {
+  const s = surface(t), viewer = mounted(s); await tick(); await tick();
+  const frame = viewer.node.querySelector('iframe'), dialog = viewer.node.querySelector('dialog');
+  const expand = viewer.node.querySelector('.html-artifact-expand');
+  message(s, frame, 'ready');
+  message(s, frame, 'resize', { height: 4096, naturalHeight: 12000, feedback: false });
+  await new Promise(resolve => setTimeout(resolve, 135));
+  const sent = presentation(s, frame, false); expand.click();
+  assert.equal(dialog.open, false); assert.equal(frame.style.height, '4096px');
+  message(s, frame, 'presentation-ready', { expanded: false, sequence: sent[0].sequence }); await tick();
+  assert.equal(dialog.open, false);
+  message(s, frame, 'presentation-ready', { expanded: true, sequence: sent[0].sequence }); await tick();
+  assert.equal(dialog.open, true); assert.equal(frame.style.height, '12000px');
+  dialog.querySelector('[aria-label="关闭全屏"]').click(); await tick();
+  assert.equal(frame.style.height, '4096px'); assert.equal(sent[1].expanded, false);
+  expand.click(); assert.equal(sent.length, 2);
+  message(s, frame, 'presentation-ready', { expanded: false, sequence: sent[1].sequence }); await tick();
+  expand.click(); assert.equal(sent[2].sequence, sent[1].sequence + 1);
+  message(s, frame, 'presentation-ready', { expanded: true, sequence: sent[0].sequence }); await tick();
+  assert.equal(dialog.open, false);
+  message(s, frame, 'presentation-ready', { expanded: true, sequence: sent[2].sequence }); await tick();
+  assert.equal(dialog.open, true); assert.equal(viewer.node.querySelector('iframe'), frame);
+});
+
+test('presentation ACK requires exact keys and timeout cannot change or poison later geometry', async t => {
+  const s = surface(t), viewer = mounted(s); await tick(); await tick();
+  const frame = viewer.node.querySelector('iframe'), dialog = viewer.node.querySelector('dialog');
+  message(s, frame, 'ready'); const sent = presentation(s, frame, false);
+  viewer.node.querySelector('.html-artifact-expand').click();
+  const ack = { expanded: true, sequence: sent[0].sequence };
+  for (const extra of [{ ...ack, extra: 1 }, { ...ack, sequence: 0 }, { ...ack, sequence: 1.5 },
+    { ...ack, sequence: Number.MAX_SAFE_INTEGER + 1 }, { ...ack, expanded: 1 }]) {
+    message(s, frame, 'presentation-ready', extra); await tick(); assert.equal(dialog.open, false);
+  }
+  await new Promise(resolve => setTimeout(resolve, 1250));
+  assert.equal(dialog.open, false); assert.equal(frame.style.height, '320px');
+  assert.equal(viewer.node.style.height, ''); assert.match(viewer.node.textContent, /保留内联视图/);
+  message(s, frame, 'presentation-ready', ack); await tick(); assert.equal(dialog.open, false);
+  const restore = sent.at(-1); assert.equal(restore.expanded, false);
+  message(s, frame, 'presentation-ready', { expanded: false, sequence: restore.sequence }); await tick();
+  viewer.node.querySelector('.html-artifact-expand').click();
+  message(s, frame, 'presentation-ready', ack); await tick(); assert.equal(dialog.open, false);
+  message(s, frame, 'presentation-ready', { expanded: true, sequence: sent.at(-1).sequence }); await tick();
+  assert.equal(dialog.open, true);
+});
+
+test('restore timeout leaves inline usable but refuses a late ACK and another expansion', async t => {
+  const s = surface(t), viewer = mounted(s); await tick(); await tick();
+  const frame = viewer.node.querySelector('iframe'), expand = viewer.node.querySelector('.html-artifact-expand');
+  message(s, frame, 'ready'); const sent = presentation(s, frame, false);
+  expand.click(); message(s, frame, 'presentation-ready', { expanded: true, sequence: 1 }); await tick();
+  viewer.node.querySelector('[aria-label="关闭全屏"]').click(); await tick();
+  await new Promise(resolve => setTimeout(resolve, 1250));
+  assert.equal(expand.disabled, true); assert.equal(frame.style.height, '320px');
+  message(s, frame, 'presentation-ready', { expanded: false, sequence: 2 }); await tick();
+  expand.click(); assert.equal(sent.length, 2); assert.equal(viewer.node.querySelector('dialog').open, false);
+  assert.match(viewer.node.textContent, /恢复尚未确认/);
+});
+
+test('pagehide and disposal during save ACK prevent late modal and release once', async t => {
+  for (const pagehide of [false, true]) {
+    const s = surface(t), viewer = mounted(s); await tick(); await tick();
+    const frame = viewer.node.querySelector('iframe'); message(s, frame, 'ready');
+    presentation(s, frame, false); viewer.node.querySelector('.html-artifact-expand').click();
+    if (pagehide) s.w.dispatchEvent(new s.w.Event('pagehide')); else viewer.dispose();
+    message(s, frame, 'presentation-ready', { expanded: true, sequence: 1 }); await tick();
+    assert.equal(viewer.node.querySelector('dialog').open, false);
+    assert.equal(viewer.node.querySelector('iframe'), null); assert.equal(s.released.length, 1);
+    viewer.dispose(); assert.equal(s.released.length, 1);
+  }
+});
+
+test('link or image cancels an in-flight expansion; late save ACK cannot cover the host action', async t => {
+  for (const action of ['link', 'image']) {
+    const s = surface(t), viewer = mounted(s), opened = []; await tick(); await tick();
+    const frame = viewer.node.querySelector('iframe'); message(s, frame, 'ready');
+    const sent = presentation(s, frame, false); viewer.node.querySelector('.html-artifact-expand').click();
+    Object.defineProperty(s.w.navigator, 'userActivation', { value: { isActive: true } });
+    s.w.piGuiDesktop.openWebUrl = async href => { opened.push(href); return { ok: true }; };
+    frame.focus();
+    const src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jJ1sAAAAASUVORK5CYII=';
+    message(s, frame, action, action === 'link' ? { href: 'https://example.invalid/report' } : { src, alt: 'fixture' });
+    await tick(); message(s, frame, 'presentation-ready', { expanded: true, sequence: sent[0].sequence }); await tick();
+    assert.equal(viewer.node.querySelector('dialog').open, false);
+    assert.equal(sent.at(-1).expanded, false); assert.equal(frame.style.height, '320px');
+    if (action === 'link') {
+      assert.equal(s.d.querySelector('#confirmLayer').hidden, false);
+      s.d.querySelector('#confirmCard .btn:not(.primary)').click(); await tick();
+      assert.equal(s.d.querySelector('#confirmLayer').hidden, true); assert.equal(opened.length, 0);
+    } else {
+      const imageDialog = s.d.querySelector('.html-artifact-image-dialog'); assert.equal(imageDialog.open, true);
+      imageDialog.dispatchEvent(new s.w.Event('cancel', { cancelable: true }));
+      assert.equal(s.d.querySelector('.html-artifact-image-dialog'), null);
+    }
+    assert.equal(viewer.node.querySelector('iframe'), frame);
+  }
 });
 
 test('Runtime production renderer wires multiple live artifacts, isolates sessions, destroys on leave and reopens by scoped read', async t => {
