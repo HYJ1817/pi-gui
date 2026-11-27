@@ -1,9 +1,18 @@
-﻿/* Stop锛堝仠姝級鍦ㄨ閰嶅眰銆丷outer銆乥ridge 涓庡墠绔箣闂寸殑瀹屾暣濂戠害 鈥斺€?鍖呭惈 P29 鐨? * 鍐呯疆娴忚鍣ㄥ彇娑堢‘璁ゃ€? *
- * 杩欎竴浠?*鍙娴忚鍣ㄩ偅涓€娈?*锛堝唴缃祻瑙堝櫒鑷姩鍔ㄤ綔蹇呴』鍏堝け鏁堛€佷笖蹇呴』鏈夌‘璁わ級锛? * Pi 渚х殑鏉冨▉鍋滄鏃跺簭锛坈lear_queue 鈫?abort 鈫?绛夊簲绛?鈫?灞忛殰锛夊湪 tests/stop-barrier.cjs銆? * 涓よ€呭悎璧锋潵鎵嶆槸瀹屾暣鐨?Stop锛?*browser cancellation confirmed + Pi cancellation confirmed**銆? *
- * 濂戠害锛堟崲杩囦竴鐗堬紝鍒寜鏃ц涓烘敼鍥炲幓锛夛細
- *   - 娴忚鍣ㄦ病纭涔嬪墠锛?*涓€涓瓧鑺傞兘涓嶈杩?pi**锛圚TTP 涔熷帇鐫€涓嶅洖锛夛紱
- *   - 娴忚鍣ㄧ‘璁ゅけ璐?鈮?涓嶅仠 Pi锛歛bort 鐓ф牱閫侊紝浣?*缁濅笉瀹ｇО鎴愬姛**锛? *     HTTP 503 + 鍥哄畾瀹夊叏鏂囨锛堜笉鍥炴樉浠讳綍鍘熷閿欒锛夛紱
- *   - 鏃堕棿杞翠笂姘歌繙 clear_queue 鍦?abort 涔嬪墠锛? *   - 鍓嶇锛氥€屾鍦ㄥ仠姝⑩€︺€嶆槸鐐瑰嚮閭ｄ竴鍒诲氨鍐欑殑锛堜笉鏄€屽凡璇锋眰鍋滄鈥︺€嶁€斺€? *     閭ｄ細璁╃敤鎴蜂互涓哄凡缁忓仠浜嗭級锛涘け璐ヤ笉瑕嗙洊鐘舵€佹爮銆佸彧寮逛竴鏉″畨鍏?toast銆? */
+/* Stop（停止）在装配层、Router、bridge 与前端之间的完整契约 —— 包含 P29 的
+ * 内置浏览器取消确认。
+ *
+ * 这一份**只管浏览器那一段**（内置浏览器自动动作必须先失效、且必须有确认），
+ * Pi 侧的权威停止时序（clear_queue → abort → 等应答 → 屏障）在 tests/stop-barrier.cjs。
+ * 两者合起来才是完整的 Stop：**browser cancellation confirmed + Pi cancellation confirmed**。
+ *
+ * 契约（换过一版，别按旧行为改回去）：
+ *   - 浏览器没确认之前，**一个字节都不许进 pi**（HTTP 也压着不回）；
+ *   - 浏览器确认失败 ≠ 不停 Pi：abort 照样送，但**绝不宣称成功**，
+ *     HTTP 503 + 固定安全文案（不回显任何原始错误）；
+ *   - 时间轴上永远 clear_queue 在 abort 之前；
+ *   - 前端：「正在停止…」是点击那一刻就写的（不是「已请求停止…」——
+ *     那会让用户以为已经停了）；失败不覆盖状态栏、只弹一条安全 toast。
+ */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -30,7 +39,7 @@ async function waitFor(what, fn, timeoutMs = 4000) {
   for (;;) {
     const value = await fn();
     if (value) return value;
-    if (Date.now() > until) throw new Error('绛夊緟瓒呮椂锛? + what);
+    if (Date.now() > until) throw new Error('等待超时：' + what);
     await sleep(5);
   }
 }
@@ -83,8 +92,8 @@ async function main() {
         if (writeError) throw writeError;
         const command = JSON.parse(line);
         writes.push(command);
-        /* 娴忚鍣ㄧ‘璁ゅけ璐ョ殑閭ｆ潯璺緞涔熺収鏍疯鍋?Pi 鈥斺€?鐢ㄤ緥閫氳繃 abortReply 鍐冲畾
-         * 杩欐潯 abort 搴旂瓟鏄笉鏄細鍥炴潵銆?*/
+        /* 浏览器确认失败的那条路径也照样要停 Pi —— 用例通过 abortReply 决定
+         * 这条 abort 应答是不是会回来。 */
         if (command.type === 'abort') { if (abortReply) setImmediate(() => reply(command)); }
         else if (command.id !== undefined) setImmediate(() => reply(command));
       } };
@@ -110,8 +119,9 @@ async function main() {
     createCollabStore, createCollabAuthority, createCollabService, createCollabRoutes,
     createCollabProposalSource, createProposalQueue,
     createEnvironmentRoutes,
-    /* 瑁呴厤鐗囨鐜板湪涔熸瀯閫犲巻鍙叉秷鎭紪杈戣矾鐢变笌 collab 鐨勭紪杈戦椄闂ㄣ€傛湰 fixture
-     * 涓嶈繘鍏ョ紪杈戞垨 collab 鐢熸垚锛屼絾鐢ㄧ湡瀹炴湇鍔′笌鐪熷疄璺敱宸ュ巶淇濇寔鐢熶骇褰㈢姸锛?     * 涓嶇敤闅愬紡鍏ㄥ眬鎴栫┖瀵硅薄鎺╃洊瑁呴厤寮曠敤婕傜Щ銆?*/
+    /* 装配片段现在也构造历史消息编辑路由与 collab 的编辑闸门。本 fixture
+     * 不进入编辑或 collab 生成，但用真实服务与真实路由工厂保持生产形状，
+     * 不用隐式全局或空对象掩盖装配引用漂移。 */
     createMessageEditRoutes,
     messageEditService: createMessageEditService(),
     messageEditLaunch: { command: () => null, token: () => null },
@@ -136,7 +146,7 @@ async function main() {
       lastSendResult?.catch(() => {});
       return lastSendResult;
     }, abortAndWait(command) {
-      /* 鍋滄璧扮殑鏄繖涓叆鍙ｏ紙涓嶆槸 send锛夆€斺€?鍚屾牱鍙瀵熴€佷笉鏇挎崲銆?*/
+      /* 停止走的是这个入口（不是 send）—— 同样只观察、不替换。 */
       lastSendResult = raw.abortAndWait(command);
       lastSendResult?.catch(() => {});
       return lastSendResult;
@@ -148,8 +158,9 @@ async function main() {
      * composition identifiers to exist. */
     files: null,
     terminal: null,
-    /* 瑁呴厤鐗囨鐜板湪鎶婄粡鍏镐細璇濆拰鏅€氶」鐩粺涓€浜ょ粰 conversationWorkspaces銆?     * 鏈敤渚嬩笉杩涘叆 revert 璺敱锛屼絾蹇呴』鎻愪緵鐪熷疄褰㈢姸鐨勪緷璧栵紝閬垮厤 VM 瑁呴厤
-     * 鐢ㄩ殣寮忓叏灞€鎴?null 鎺╃洊鐢熶骇寮曠敤宸茬粡婕傜Щ銆?*/
+    /* 装配片段现在把经典会话和普通项目统一交给 conversationWorkspaces。
+     * 本用例不进入 revert 路由，但必须提供真实形状的依赖，避免 VM 装配
+     * 用隐式全局或 null 掩盖生产引用已经漂移。 */
     conversationWorkspaces: { withWorkspace: () => {
       throw Object.assign(Error('fixture_workspace_unavailable'), { code: 'unknown_workspace' });
     } },
@@ -185,7 +196,7 @@ async function main() {
     return { status: response.status, body: await response.json() };
   };
   try {
-    await check('瑁呴厤锛氱幆澧冩娴嬪拰瀹夎浠诲姟閫氳繃鐢熶骇 Router 鍒嗗彂', async () => {
+    await check('装配：环境检测和安装任务通过生产 Router 分发', async () => {
       const report = await fetch(new URL('/api/environment', url));
       assert.equal(report.status, 200);
       assert.deepEqual(await report.json(), { ok: true, environment: environmentReport });
@@ -196,7 +207,7 @@ async function main() {
       assert.equal(job.status, 200);
       assert.deepEqual(await job.json(), { ok: true, job: environmentJob });
     });
-    await check('A 娴忚鍣ㄦ湭纭鏃讹紝HTTP 涓?Pi 閮藉帇鐫€锛涚‘璁ゅ悗鎸?clear_queue 鈫?abort 鐨勯『搴忓彂鍑猴紝abort 搴旂瓟鍥炴潵鎵嶇畻鎴愬姛', async () => {
+    await check('A 浏览器未确认时，HTTP 与 Pi 都压着；确认后按 clear_queue → abort 的顺序发出，abort 应答回来才算成功', async () => {
       ack = deferred(); entered = deferred(); responseFinished = false;
       const before = writes.length;
       const response = post({ type: 'abort' });
@@ -204,34 +215,34 @@ async function main() {
       try {
         assert.ok(lastSendResult instanceof Promise);
         await sleep(30);
-        assert.equal(responseFinished, false, 'HTTP 涓嶈兘鍦ㄦ祻瑙堝櫒鍙栨秷纭涔嬪墠缁撴潫');
-        assert.equal(writes.length, before, 'Pi 涓嶈兘鎻愬墠鏀跺埌浠讳綍鍛戒护');
+        assert.equal(responseFinished, false, 'HTTP 不能在浏览器取消确认之前结束');
+        assert.equal(writes.length, before, 'Pi 不能提前收到任何命令');
       } finally { ack.resolve(); }
       const result = await response;
       assert.deepEqual(result, { status: 200, body: { ok: true, stop: { evidence: 'abort-response', queue: 'cleared' } } });
       assert.deepEqual(writes.slice(before).map((c) => c.type), ['clear_queue', 'abort']);
     });
-    await check('B 娴忚鍣ㄧ‘璁ゅけ璐ワ細abort 鐓ф牱閫佸嚭鍘伙紝HTTP 503 鍙湁瀹夊叏鏂囨锛屼笖涓嶅绉版垚鍔?, async () => {
+    await check('B 浏览器确认失败：abort 照样送出去，HTTP 503 只有安全文案，且不宣称成功', async () => {
       ack = deferred(); entered = deferred();
       const before = writes.length;
       const response = post({ type: 'abort' });
       await entered.promise;
       ack.reject(new Error('token=fixture-secret raw bridge error stack'));
       const result = await response;
-      /* 鎶ュ憡鍏堜簬銆屾妸鍛戒护鍐欒繘 pi銆嶈繑鍥烇紝鎵€浠ヨ繖閲岀瓑鍐欏叆钀藉湴鍐嶆柇瑷€椤哄簭銆?*/
-      await waitFor('abort 鍐欒繘 Pi', () => writes.some((c) => c.type === 'abort'));
+      /* 报告先于「把命令写进 pi」返回，所以这里等写入落地再断言顺序。 */
+      await waitFor('abort 写进 Pi', () => writes.some((c) => c.type === 'abort'));
       assert.deepEqual(writes.slice(before).map((c) => c.type), ['clear_queue', 'abort']);
       assert.equal(result.status, 503);
       assert.equal(result.body.ok, false);
       assert.equal(result.body.code, 'browser_cancel_unconfirmed');
-      assert.equal(result.body.error, 'Pi 宸叉敹鍒板仠姝㈣姹傦紝浣嗗唴缃祻瑙堝櫒鍙栨秷纭涓嶅彲鐢ㄣ€?);
+      assert.equal(result.body.error, 'Pi 已收到停止请求，但内置浏览器取消确认不可用。');
       assert.ok(!/token|fixture-secret|stack|raw bridge error/.test(JSON.stringify(result.body)));
-      /* 娴忚鍣ㄧ‘璁ゅけ璐ュ彧鏄?*鎶ュ憡**澶辫触锛汸i 渚х収鏃ф湁鏉冨▉纭 鈫?灞忛殰蹇呴』瑙ｉ櫎銆?*/
-      await waitFor('灞忛殰瑙ｉ櫎', () => !raw.stopState());
+      /* 浏览器确认失败只是**报告**失败；Pi 侧照旧有权威确认 → 屏障必须解除。 */
+      await waitFor('屏障解除', () => !raw.stopState());
       assert.ok(!JSON.stringify(raw.getState()).includes('fixture-secret'));
     });
-    await check('C prompt 涓?steer 浠嶆槸鍚屾鍙戦€侊紝鍓ユ帀澶囩敤鏍囪骞朵繚鎸佹帴鍙楅『搴?, async () => {
-      assert.ok(wrapped, '鐢熶骇瑁呴厤灞傜殑 rpc facade 蹇呴』琚彇鍒?);
+    await check('C prompt 与 steer 仍是同步发送，剥掉备用标记并保持接受顺序', async () => {
+      assert.ok(wrapped, '生产装配层的 rpc facade 必须被取到');
       for (const type of ['prompt', 'steer']) {
         const command = { type, message: 'fixture', __fallbackOwner: 'owner' };
         const before = writes.length;
@@ -244,7 +255,7 @@ async function main() {
         assert.deepEqual(await post({ type, message: 'fixture' }), { status: 200, body: { ok: true } });
       }
     });
-    await check('C 鍚屾鍐欏け璐ヤ繚鎸侀敊璇韩浠斤紝涓斾笉鏍囪銆屽凡鎺ュ彈銆?, () => {
+    await check('C 同步写失败保持错误身份，且不标记「已接受」', () => {
       const before = [modelAccepted.length, activityAccepted.length];
       writeError = new Error('fixture synchronous failure');
       try { assert.throws(() => wrapped.send({ type: 'prompt' }), error => error === writeError); }
@@ -274,7 +285,7 @@ async function main() {
       wrapped.send({ type: 'prompt', message: 'released' });
       assert.equal(writes.length, before[0] + 1);
     });
-    await check('C 渚涘簲鍟嗗彧璇诲悓姝ヤ笉闃绘柇 prompt锛屾ā鍨嬪畧鍗嫆缁濇椂浠嶄笉鍐欎笉璁拌处', () => {
+    await check('C 供应商只读同步不阻断 prompt，模型守卫拒绝时仍不写不记账', () => {
       const initial = [writes.length, modelAccepted.length, activityAccepted.length];
       syncing = true;
       try { assert.equal(wrapped.send({ type: 'prompt', message: 'sync is read only' }), undefined); }
@@ -286,14 +297,14 @@ async function main() {
       finally { guardError = null; }
       assert.deepEqual([writes.length, modelAccepted.length, activityAccepted.length], before);
     });
-    await check('D 鍖呰灞傛妸 bridge 鐨勫仠姝?Promise 鍘熸牱杩斿洖锛堜笉鍚炪€佷笉鏇挎崲锛夛紝纭鍓嶄笉鍐?Pi', async () => {
+    await check('D 包装层把 bridge 的停止 Promise 原样返回（不吞、不替换），确认前不写 Pi', async () => {
       ack = deferred(); entered = deferred();
       const before = writes.length;
       const result = wrapped.send({ type: 'abort' });
       try {
-        assert.equal(result, lastSendResult, '鍖呰灞備笉璁告崲鎺?Promise 韬唤');
+        assert.equal(result, lastSendResult, '包装层不许换掉 Promise 身份');
         await entered.promise;
-        assert.equal(writes.length, before, '娴忚鍣ㄦ病纭涔嬪墠涓€涓瓧鑺傞兘涓嶅啓');
+        assert.equal(writes.length, before, '浏览器没确认之前一个字节都不写');
       } finally { ack.resolve(); }
       assert.equal((await result).ok, true);
       assert.deepEqual(writes.slice(before).map((c) => c.type), ['clear_queue', 'abort']);
@@ -321,43 +332,43 @@ async function main() {
   const reset = () => {
     frontend.S.streaming = true; frontend.S.stopping = false; frontend.S.stopOwnedTurn = false;
     frontend.S.bridgeRun = 1; frontend.S.hasProject = true; frontend.S.bridgeState = 'ready';
-    frontend.el.statusText.textContent = '姝ｅ湪澶勭悊'; frontend.el.toasts.replaceChildren(); commands.length = 0;
+    frontend.el.statusText.textContent = '正在处理'; frontend.el.toasts.replaceChildren(); commands.length = 0;
   };
   try {
-    await check('鍓嶇锛氭祻瑙堝櫒纭澶辫触鏃剁姸鎬佹爮鍋滃湪銆屾鍦ㄥ仠姝⑩€︺€嶏紝鍙湁涓€鏉″畨鍏?toast', async () => {
-      reset(); commandReply = { ok: false, code: 'browser_cancel_unconfirmed', error: '鍐呯疆娴忚鍣ㄥ彇娑堢‘璁や笉鍙敤' };
+    await check('前端：浏览器确认失败时状态栏停在「正在停止…」，只有一条安全 toast', async () => {
+      reset(); commandReply = { ok: false, code: 'browser_cancel_unconfirmed', error: '内置浏览器取消确认不可用' };
       const changes = [];
       const observer = new w.MutationObserver(records => changes.push(...records));
       observer.observe(frontend.el.statusText, { childList: true, characterData: true, subtree: true });
       try {
         await frontend.stop();
-        /* 鐐瑰嚮閭ｄ竴鍒诲啓鐨勬槸銆屾鍦ㄥ仠姝⑩€︺€嶏紱澶辫触璺緞**涓嶈**鍐嶆敼瀹冿紙涔熸病鏈夈€屽凡璇锋眰鍋滄鈥︺€嶏級銆?*/
-        assert.equal(frontend.el.statusText.textContent, '姝ｅ湪鍋滄鈥?);
-        assert.equal(changes.length + observer.takeRecords().length, 1, '鐘舵€佹爮鍙琚啓涓€娆★紙鐐瑰嚮鏃讹級');
+        /* 点击那一刻写的是「正在停止…」；失败路径**不许**再改它（也没有「已请求停止…」）。 */
+        assert.equal(frontend.el.statusText.textContent, '正在停止…');
+        assert.equal(changes.length + observer.takeRecords().length, 1, '状态栏只该被写一次（点击时）');
       } finally { observer.disconnect(); }
-      assert.equal(frontend.S.stopping, true, 'Pi 渚ц繕娌＄‘璁わ紝蹇呴』淇濇寔淇濇姢');
+      assert.equal(frontend.S.stopping, true, 'Pi 侧还没确认，必须保持保护');
       assert.equal(frontend.el.toasts.querySelectorAll('.toast.error').length, 1);
-      assert.equal(frontend.el.toasts.textContent, '鍐呯疆娴忚鍣ㄥ彇娑堢‘璁や笉鍙敤');
+      assert.equal(frontend.el.toasts.textContent, '内置浏览器取消确认不可用');
       assert.equal(commands.length, 1); assert.equal(commands[0].type, 'abort');
     });
-    await check('鍓嶇锛氭垚鍔熸椂鏄剧ず銆屽凡鍋滄銆嶈€屼笉鏄€屽凡璇锋眰鍋滄鈥︺€嶏紝涓斾笉鍐嶅寮?toast', async () => {
+    await check('前端：成功时显示「已停止」而不是「已请求停止…」，且不再多弹 toast', async () => {
       reset(); commandReply = { ok: true, stop: { evidence: 'abort-response' } };
       await frontend.stop();
-      assert.equal(frontend.el.statusText.textContent, '宸插仠姝?);
+      assert.equal(frontend.el.statusText.textContent, '已停止');
       assert.equal(frontend.S.stopping, false);
       assert.equal(frontend.S.streaming, false);
       assert.equal(frontend.el.toasts.children.length, 0);
       assert.equal(commands.length, 1);
     });
-    await check('鍓嶇锛氱瓑寰呯‘璁ゆ湡闂村氨鏄剧ず銆屾鍦ㄥ仠姝⑩€︺€嶏紙涓嶆槸銆屽凡璇锋眰鍋滄鈥︺€嶏級', async () => {
+    await check('前端：等待确认期间就显示「正在停止…」（不是「已请求停止…」）', async () => {
       reset(); const pending = deferred(); commandReply = pending.promise;
       const stopping = frontend.stop();
       assert.equal(commands.length, 1);
-      assert.equal(frontend.el.statusText.textContent, '姝ｅ湪鍋滄鈥?);
+      assert.equal(frontend.el.statusText.textContent, '正在停止…');
       assert.equal(frontend.S.stopping, true);
       pending.resolve({ ok: true, stop: { evidence: 'abort-response' } });
       await stopping;
-      assert.equal(frontend.el.statusText.textContent, '宸插仠姝?);
+      assert.equal(frontend.el.statusText.textContent, '已停止');
     });
   } finally { w.close(); }
   console.log(`gui-browser-stop: ${passed}/${passed + failed} cases passed`);
