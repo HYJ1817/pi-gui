@@ -33,14 +33,18 @@
 ## 续接记录（2026-11-27）
 
 - 原父会话因服务 100 轮上限停止；续接仅恢复既有 P2 工作树，不修改根目录设置分支及其未跟踪文件。
-- 用户再次明确：A1 仅普通功能边界，不碰 A 安全 suite/文件，**本次不调用模型**。C 继续现有实现和正常沙箱良性验证，不重启 A 安全研究。此前 `about:blank` 首次失败及服务拒绝保持未解决，不换代理绕过。
+- 用户在续接初期明确：A1 仅普通功能边界，不碰 A 安全 suite/文件，当时不调用模型。C 继续现有实现和正常沙箱良性验证，不重启 A 安全研究。此前 `about:blank` 首次失败及服务拒绝保持未解决，不换代理绕过。
+- 用户随后明确追加“可以调用模型”，现已授权 P2 正常真实模型闭环；此授权不解除 A 安全研究阻断，不准擅换供应商/端点、下载依赖、复制 auth 文件、泄漏凭证或写真实用户会话。先只读核验已配置模型与可用凭据来源（仅 metadata/有无），在 TEMP 会话进行有界短请求，不能把合成声明或 fakePi 算作真实模型。
+- 用户误关闭后，已恢复被中断的 B2、D2、E2 原线程；C 原任务继续，不重复启动。A1 原线程达到服务 100 轮上限且驱动未提交，新增 A2 接管其原工作树，先完成并提交入口/授权门控/普通驱动及调用就绪条件，再在最终产品集成后安排真实模型闭环；不对旧 P1 树重复消耗额度。
 - D 后续四个原始提交按顺序集成为 `7224c87a`、`9d946b4f`、`d1cb0581`、`2d818cc4`；已集成的 `52900f2` 不重复获取。D 的 75/75、98/98、23/23、17/17 仅为其交付文件树的定向证据，不等同最终集成结果。
 - C 首个产品提交 `7a30c5f0` 集成为 `98ee052c`；普通 UI 测试适配与独立良性 Electron 驱动 `1d4bec0d` 集成为 `0aacdb53`。C 交付普通 UI 20 项/169 断言，原 13 项/111 断言保留；联合 D 38 项报 58/58。这是修复 R-D 发现前的定向证据；T3 对照与最终真实视觉文档仍待交付。
 - B3 专属分支读取回归报告 17/17（16 行为子项+父容器）、372 断言；组合 backend/model 63/63，相邻 edit-target 20/20、service 49/49、HTTP 11/11。提交及主树注册仍待交付。父核对 `session-navigation.js` 后保留其有意的 bounded text-only 只读预览契约，不扩成执行时间线；该页的可视化 UI 是 P1 既有范围差异，不能以 API 历史读取+共享 viewer 回归宣称该页已支持。活动 Classic 恢复及 Runtime live/dormant 的实际渲染链与它分别记录。
 - A1 良性样例提交 `a6247de7` 集成为 `a2cdaeb0`。真实 Pi 无模型契约 13/13 的 TEMP 证据由 A1 收尾，明确包含 synthetic assistant setup，不是模型调用验收。
 - B 原代理结束时尚未产生提交，不能按界面 completed 当作开发完成。新增 B2 收尾存储/锁/维护/性能，B3 独占新增分支读链回归测试；共享 B 工作树但文件所有权分离，不替对方提交。
 - E2 首批登记已直接提交到集成树 `3584bcd2`：新增 D 三套及 A1 normal 共四叶，canonical 358→362，原叶删除/重复/换组均 0。新增测试 45/45、CI 守卫 12/12、test:ci 10 叶 exit 0；Store 135/135 场景、529 assertions、另 skip 3。该运行当时旧 UI 10 pass/3 fail 原样记录，之后才集成 C 适配 `0aacdb53`，不得混称同一次运行通过。B/A1/C 后续新入口仍须逐项登记。
-- R-D 已完成首轮只读独立审查，四项 Important 待修，见下节。最终完整 canonical、真实视觉、正式构建及整体独立验收仍待完成。
+- E2 后续文档收尾 `51412bbb3ab1226a3dea3a9831fdda197b2cedd9` 已在主集成树，父已核对 ancestry 与 diff check；被测行为 HEAD `0aacdb53` 的 UI 单叶仅运行一次：20 pass / fail 0 / skip 0、169 assertions、exit 0。旧 10 pass/3 fail 保留为历史，文档本地链接 5、标题锚点 3、missing 0；本批 canonical 仍 362，branches 尚未注册。E2 任务结束，不循环等候其他线。
+- R-D 已完成首轮只读独立审查，四项 Important 待修，见下节。另已启动 B 的两项独立只读首轮审查：功能审查关注当前分支授权/恢复与系统存储接入，安全/故障审查关注锁/维护/配额；均在 B 工作树记录所读文件身份，B2 在途变化须交付前局部核对，不接替 A 的 Electron 研究。
+- 最终完整 canonical、真实视觉、正式构建及整体独立验收仍待完成。
 
 ### 首轮独立功能审查（R-D）
 
@@ -52,6 +56,7 @@
 - 证据：`C:/Users/21022/AppData/Local/Temp/pi-gui-rd-review-zhpvD1/report-final.json` 与同目录 `benign-functional-probe.cjs`；Chrome 158.0.8127.88、页面异常 0、源摘要无变化。R-D 未运行 Electron/A 安全 suite/Pi/模型/产物或完整 canonical。
 - C 首轮正常沙箱良性 UI 报 22 checks、9 截图，生产 main/preload/native 注册、四组宽窄深浅及 DPR 1.5；证据 `C:/Users/21022/AppData/Local/Temp/pi-visual-replies-zhKjh1/evidence/viewer.json`。其中样例约 4008px，**不能覆盖 RD-3 的 >4096px 场景**；修后须补相应良性回归及增量独立复审，不能沿用本次通过数字。
 - 新增 D2 在原 D 工作树修复 RD-1/RD-4，并与 C 对齐最小协议：resize 可选 `feedback:boolean`；仅显式 false 才消费原始 naturalHeight，true 保持全屏高度，缺字段 v1 仅采用 height。presentation/presentation-ready 均严格六字段 schemaVersion/id/nonce/type/expanded/sequence（正安全整数）；true 在本 realm 同步保存后 ACK，C 等 ACK 后才改几何；false 先恢复内联几何，再由 frame 双原生 rAF 恢复内部滚动后 ACK，不受受控 runtime 暂停影响。该契约待实现与回归，不等于发现已修复。超时/过期 ACK 不得继续切换几何或污染下一次展开。
+- D2 首个产品候选修复 `6989cecc82a737414e692573a25fc364b8d17534` 已集成为 `fd88630d`（measurement/feedback、layout 字段保留、frame presentation 握手）。作者的接口 Node 过滤测试仅 6/6、skip 0、601.1942ms；新增测试尚未提交，RD-4 及真实 Chromium/正常沙箱验证仍待完成。C 消费端还在修改，不能把本次仅生产端集成算作完整握手或 RD 发现验收通过。
 - 最多三轮审查原则不变，未修复 Important 不得验收通过。
 
 ### B3 测试交付依赖
