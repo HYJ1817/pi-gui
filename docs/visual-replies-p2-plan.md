@@ -79,6 +79,17 @@
 - **真实模型闭环（用户已批准用本机 magpie 网关，TEMP 会话、单次短 prompt）打通到真实生产级缺陷**：显式门控注入（pi.cmd、xingchiapi/gpt-6.1-sol、openai-responses、127.0.0.1:3425 网关，key 经专用 env 不落盘/不进证据）后 `normal-sandbox`/`production-preload`/`explicit-model-selected` 全 PASS，真实模型被选中并实际收到 prompt。但**生成开始即崩溃**：`server/html-artifact-projection.js:30` `node.type?.startsWith is not a function`，uncaught TypeError → backend exit 1 → SSE 断开 + pi 孤儿流产（会话记录 stopReason:aborted、durationMs 29、usage 全 0）。离线 fakePi 永不触发（合成 wire 的 type 皆字符串）——**fixture 形状偏离上游真实形状的盲区实例**。逐项排除实证：直接 pi probe（同 env/args/flags/扩展/shell 包装）全部成功完成生成，唯一失败路径是生产 backend 进程内。repro 脚本 `C:/Users/21022/AppData/Local/Temp/pi-probe-shell/backend-repro.cjs` 可重复（exit 1、完整堆栈）。证据 `C:/Users/21022/AppData/Local/Temp/pi-visual-replies-ElQgvm/`（含 generate-first-failure.png 显示后端断开）。**已交 B4b 修复（含 I1），模型闭环在修复后重跑**；A2 的驱动本身证明可用，不需重写。
 - 探查过程另确认：gateway 拒绝非编程客户端 UA（client_not_allowed），但 pi 原生 UA 与凭据可用；key 为 6 字符本地标记，全程未打印/未落证据。
 
+### 父侧 crash 热修与验证（集成前 stash）
+
+- B4b 取证前其执行通道故障（自报"无客户端工具"），无法完成 crash 修复；为避免整个闭环停摆，父直接承担 `server/html-artifact-projection.js` 的防御修复——该文件属 server/ 共享所有权（B 表亦含 `server/html-artifact-*.js`），父作为集成方修复不违反线所有权，但**独立增量复审不可省略**。
+- 修复（单行 + 注释）：`const execution = typeof node.type === 'string' && node.type.startsWith('tool_execution_')`；fail-closed——非字符串 type 一律按非 execution 处理，不改变任何正常投影语义，HTML 隐藏逻辑不受影响。
+- **load-bearing 证明**：当前 HEAD（旧码）对非字符串 type 形状抛 `TypeError: node.type?.startsWith is not a function`（与生产崩溃原文一致）；修复后同形状原样投影、不崩。
+- 回归测试（html-artifact-backend.cjs 新增一例）：对象/数字/null/布尔/数组 type 载荷嵌入 message_update partial、agent_end messages 等真实上游嵌套位置，断言投影逐字节恒等且不崩 + HTML 字节仍被隐藏。**39/39 pass**（原 38 + 新 1），fail/skip 0。
+- **真实闭环实证**（repro2，生产 server.js + 真实 pi.cmd + magpie 网关、TEMP world）：修复后 backend 全程存活 40s+，prompt submit 200，pi 会话实际完成生成——assistant `stopReason:"stop"`、usage 七键齐全（input/output/cacheRead/cacheWrite/reasoning/totalTokens/cost），content parts `[thinking, text]`；零 crash 行。**这是修复后真实模型闭环打通的直接证据**，与修复前 stopReason:aborted/usage 全 0/durationMs 29 形成对照。
+- 相邻套件：html-artifact-process 8/8 pass（含修复）；离线 functional 18 项中 17 PASS（唯一失败仍是 generate 阶段 session-return 超时，与修复无关、属 C2 对照范围）。**注意**：functional 运行时修复在工做区内、stash 前；canonical 态（stash 后干净树）未重跑——集成落盘后须以落地码为准补验。
+- 取证分工：B4b 收缩为纯取证（确认非字符串 type 的准确字段路径/typeof 分布 + fakePi fixture 与真实形状偏差清单），不再承担修复。持久化会话扫描（原 crash world 8 份会话）非字符串 type 命中 **0**——违规形状仅存在于流式 wire 事件（streaming partial），不落盘，与"离线 fakePi 永不触发"一致。
+- stash：`78b7d76d503eb636f7ca91537e4d3e51494de23e`（tag `parent-hotfix-projection-crash-20261127`），含修复 + 回归测试两文件；集成时以 SHA apply（不用 pop），落地为独立回滚边界提交。
+
 ### R-B 首轮独立安全审查（重试后完成）
 
 - 审查范围为主集成树 B 产品（HEAD `e4468695`），结论 **不通过，Important 1**：I1「恢复入口在自身锁释放失败时仍确认成功」。`server/html-artifact-store.js` 的 release 吞掉 `ownedUnlink` 失败（约 186 行），`recoverLock()`（约 481 行）在自身 `.writer.lock` 删除失败时仍返回 `{ok:true}`；`server.js` 启动恢复（约 465 行）与维护入口同样报假成功。实证：注入一次 EACCES 后 live owner 的锁残留，后续 read/recoverLock 永久 busy（owner 存活，身份门控不能合法清除）；快照无损坏/丢失，但可用性卡死且 API 撒谎。历史：基线 publish 在 `dfdc1dde` 已吞释放错误，新增暴露面是 recovery API/startup/maintenance 的假成功。
