@@ -94,6 +94,7 @@ const { desktopQualification } = require('./desktop-qualification.cjs');
  * SOCKS5 / TUN 只有 Chromium 网络栈知道怎么判定与连接，所以后端经私有 IPC
  * 把「这条 URL 走哪条线路」和「代理线路上的 GET」交给这里。 */
 const { createMarketNetworkBridge } = require('./market-network.cjs');
+const { createHtmlArtifactSecurity } = require('./html-artifact-security.cjs');
 
 registerCredentialScheme(protocol);
 
@@ -113,6 +114,7 @@ const TOKEN_HEADER = 'X-Pi-Gui-Token';
 let win = null;
 let desktopTheme = null;
 let desktopFonts = null;
+let htmlArtifactSecurity = null;
 let systemSettings = null;
 let systemNetwork = null;
 let systemProxy = null;
@@ -359,14 +361,12 @@ async function ensureServer() {
  * 文件」这一个能力而存在（见 installOpenPathHandler）。令牌依然不进渲染进程 ——
  * preload 只转发**项目相对路径**，一个字节的凭据都不碰。 */
 function installTokenHeader() {
-  // Source builds can use an existing development backend. Keep desktop write
-  // operations behind the native bridge even when that backend accepts web requests.
-  session.defaultSession.webRequest.onBeforeRequest({ urls: [`${ORIGIN}/*`, `http://localhost:${PORT}/*`] }, (details, callback) => {
-    const path = new URL(details.url).pathname;
-    callback({ cancel: !server?.connected && details.method === 'POST' && (path === '/api/environment/install' || path === '/api/environment/pi-path') });
-  });
-  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: [`${ORIGIN}/*`] }, (details, callback) => {
-    callback({ requestHeaders: { ...details.requestHeaders, [TOKEN_HEADER]: AUTH_TOKEN } });
+  // One owner composes onBeforeRequest + onBeforeSendHeaders with the existing
+  // disconnected-backend install restriction; never overwrite either hook.
+  // Token stripping also covers external redirect hops, injection only the
+  // proved host main frame. Opaque Office static scripts need no credentials.
+  htmlArtifactSecurity.installRequestGuards(session.defaultSession, {
+    token: AUTH_TOKEN, tokenHeader: TOKEN_HEADER, backendConnected: () => Boolean(server?.connected),
   });
 }
 
@@ -386,6 +386,7 @@ function installTokenHeader() {
  * 渲染进程的 session），所以这里要自己带令牌头。 */
 function installOpenPathHandler() {
   ipcMain.handle('pi-gui:open-path', async (_e, relPath, conversationId = null) => {
+    if (!htmlArtifactSecurity?.isTrustedSender(_e)) return { ok: false, code: 'untrusted_sender' };
     if (conversationId !== null && (typeof conversationId !== 'string' || !/^[\da-f-]{36}$/.test(conversationId))) return { ok: false, error: '会话身份不可用' };
     if (typeof relPath !== 'string' || !relPath.trim()) {
       return { ok: false, error: '缺少文件路径' };
@@ -445,11 +446,13 @@ function installOpenPathHandler() {
  * 平白多出一次请求，而且和浏览器实际发的请求并不是同一个。 */
 function installOpenExternalHandler() {
   ipcMain.handle('pi-gui:open-web-url', async (_event, url) => {
+    if (!htmlArtifactSecurity?.isTrustedSender(_event)) return { ok: false, code: 'untrusted_sender' };
     if (!isSafeWebUrl(url)) return { ok: false, error: '已拒绝不安全的 Web 链接' };
     try { await shell.openExternal(url); return { ok: true }; }
     catch { return { ok: false, error: '打开 Web 链接失败' }; }
   });
   ipcMain.handle('pi-gui:open-external', async (_e, url) => {
+    if (!htmlArtifactSecurity?.isTrustedSender(_e)) return { ok: false, code: 'untrusted_sender' };
     const target = typeof url === 'string' ? url.trim() : '';
     if (!target) return { ok: false, error: '缺少链接' };
     if (!isSafeReleaseUrl(target)) {
@@ -767,15 +770,18 @@ function hardenWebContents(wc) {
     return;
   }
 
-  wc.setWindowOpenHandler(({ url }) => {
-    if (isSafeExternal(url)) shell.openExternal(url);
-    return { action: 'deny' };
-  });
+  // HandlerDetails does not identify the initiating frame. Never turn an
+  // iframe's window.open into an out-of-sandbox shell.openExternal operation.
+  // Host UI external links retain their exact-main-frame IPC entry points.
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   const guard = (e, url) => {
+    if (e.defaultPrevented || htmlArtifactSecurity?.shouldBlockNavigation(wc, e)) {
+      e.preventDefault(); return;
+    }
     if (isSelfUrl(url)) return; // 自己的页面随便跳
     e.preventDefault();
-    if (isSafeExternal(url)) shell.openExternal(url);
+    if (isSafeExternal(url) && htmlArtifactSecurity?.canOpenExternal(wc, e)) shell.openExternal(url);
   };
 
   wc.on('will-navigate', guard);
@@ -820,8 +826,14 @@ function createWindow() {
     titleBarOverlay: desktopTheme.windowOptions().titleBarOverlay,
     show: false,
     webPreferences: {
+      sandbox: true,
+      webSecurity: true,
       contextIsolation: true,
       nodeIntegration: false,
+      nodeIntegrationInSubFrames: false,
+      nodeIntegrationInWorker: false,
+      webviewTag: false,
+      allowRunningInsecureContent: false,
       spellcheck: false,
       backgroundThrottling: false, // Hidden-to-tray must retain renderer timers/state.
       additionalArguments: ['--pi-gui-theme-bridge', '--pi-gui-font-bridge', '--pi-gui-system-bridge'],
@@ -832,6 +844,7 @@ function createWindow() {
     },
   });
 
+  htmlArtifactSecurity.attachWebContents(win.webContents);
   desktopTheme.applyWindow();
   win.once('ready-to-show', () => {
     /* 先量偏差，再最大化 —— 顺序不能反：最大化之后 getContentBounds() 给的是
@@ -1015,6 +1028,7 @@ function finishQuit() {
   browserAgent?.stop();
   runtimeBrowserHost?.stop();
   credentialDesktop?.dispose();
+  htmlArtifactSecurity?.dispose();
   desktopFonts?.dispose();
   killServer();
   systemNetwork?.dispose(); systemStorageDesktop?.dispose(); systemMaintenance?.dispose();
@@ -1096,6 +1110,10 @@ if (!app.requestSingleInstanceLock()) {
     desktopTheme.register();
     desktopFonts = createSystemFontIpc({ ipcMain, getWindow: () => win, origin: ORIGIN });
     desktopFonts.register();
+    htmlArtifactSecurity = createHtmlArtifactSecurity({ getWindow: () => win, origin: ORIGIN,
+      hasSwitch: name => app.commandLine.hasSwitch(name) });
+    htmlArtifactSecurity.installIpc(ipcMain);
+    htmlArtifactSecurity.installSessionGuards(session.defaultSession);
     // 令牌头的注入必须赶在窗口发第一个请求之前装好
     installTokenHeader();
     // 「用系统默认程序打开文件」与「用系统浏览器打开链接」两个 IPC ——
@@ -1149,7 +1167,8 @@ if (!app.requestSingleInstanceLock()) {
     /* 右栏内置浏览器。与上面两个 handler 同一时机 —— 必须在 createWindow()
      * 之前注册，否则页面首帧调用会拿到 "No handler registered"。
      * WebContentsView 本身是惰性创建的：页面加载时不建，用户真打开右栏才建。 */
-    browser = createBrowserController({ origin: ORIGIN, getWindow: () => win, ipcMain,
+    browser = createBrowserController({ origin: ORIGIN, getWindow: () => win,
+      ipcMain: { handle: (channel, handler) => ipcMain.handle(channel, htmlArtifactSecurity.guardHandler(handler)) },
       isVisible: () => !runtimeBrowserHost || runtimeBrowserHost.isLegacyVisible(),
       logEvent: (event, details) => mlog('electron', event, details) });
     browser.register();

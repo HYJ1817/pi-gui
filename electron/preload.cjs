@@ -46,6 +46,13 @@
  * 提示绝对路径」（前端 public/git.js 的 openFile 本来就有这条回退分支），
  * 而不是让渲染进程在加载阶段就报错、整个界面白屏。 */
 try {
+  // Electron always supplies isMainFrame. The DOM check is an independent
+  // guard; unlike origin/name, neither can be asserted by an opaque child.
+  // Non-renderer VM contract fixtures have no window/process.isMainFrame.
+  if (process.isMainFrame === false || (typeof window !== 'undefined'
+    && (process.isMainFrame !== true || window.top !== window))) {
+    throw new Error('main_frame_only');
+  }
   const { contextBridge, ipcRenderer } = require('electron');
 
   // The fixed display snapshot is read before the first document paint. Nothing
@@ -79,6 +86,21 @@ try {
       grantId: typeof source.grantId === 'string' ? source.grantId : '',
     };
   }
+
+  // A separate minimal bridge is the fixed HTML-artifact contract. Existing
+  // desktop consumers retain piGuiDesktop; artifacts never receive either.
+  contextBridge.exposeInMainWorld('piGui', {
+    // Append a named EMPTY frame, await registration, only then assign srcdoc.
+    // Removal precedes release; neither method accepts HTML, IDs or IPC names.
+    htmlArtifacts: {
+      registerFrame: request => ipcRenderer.invoke('pi-gui:visual-replies-register-frame', {
+        name: typeof request?.name === 'string' ? request.name : '',
+      }),
+      releaseFrame: request => ipcRenderer.invoke('pi-gui:visual-replies-release-frame', {
+        name: typeof request?.name === 'string' ? request.name : '',
+      }),
+    },
+  });
 
   contextBridge.exposeInMainWorld('piGuiDesktop', {
     /** 供前端判断「我在桌面版里」（网页版没有这个对象）。 */
