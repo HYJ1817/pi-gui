@@ -462,7 +462,13 @@ const executionTimelineStore = createExecutionTimelineStore({ dataDir: DATA_DIR 
 const htmlArtifactStore = createHtmlArtifactStore({ dataDir: DATA_DIR });
 // A dead v2 owner can be recovered only under the shared kernel gate. A live,
 // legacy/torn, or unknown owner stays unavailable; startup never steals it.
-void htmlArtifactStore.recoverLock().catch(() => {});
+void htmlArtifactStore.recoverLock().catch(error => {
+  // Recovery failure degrades Artifact storage, not the rest of startup. Never
+  // print the system exception, owner record, path or snapshot payload.
+  console.warn(['html_artifact_storage_busy', 'html_artifact_storage_unsafe',
+    'html_artifact_storage_corrupt', 'html_artifact_storage_release_failed'].includes(error?.code)
+    ? error.code : 'html_artifact_storage_failed');
+});
 let htmlReconciler = null;
 const htmlPublication = { begin: () => htmlReconciler?.begin() };
 const classicExecutionIdentity = scope => ({ kind: 'classic', workspaceId: scope.workspaceKey, sessionId: scope.sessionId });

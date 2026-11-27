@@ -39,7 +39,7 @@ export function createHtmlArtifactMaintenance({ store, roots, maintenance = null
           mode: 'candidates-only', nativeExclusionProven: false };
       } catch (error) {
         return { ok: false, code: ['html_artifact_storage_busy', 'html_artifact_storage_unsafe',
-          'html_artifact_storage_corrupt'].includes(error?.code) ? error.code : 'html_store_unavailable' };
+          'html_artifact_storage_corrupt', 'html_artifact_storage_release_failed'].includes(error?.code) ? error.code : 'html_store_unavailable' };
       } finally {
         try {
           if (admitted && (await maintenance.release('storage'))?.ok !== true) {
