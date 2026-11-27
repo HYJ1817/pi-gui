@@ -68,6 +68,18 @@
 - B 首轮独立功能静态审查有条件通过：Blocker 0 / Important 0 / Nit 0，Pre-existing 范围差异 1；未实跑功能测试，七个主审文件在作者提交前后摘要变化 0/7，不能将作者数字冒称审查者实测。锁/GC/维护故障的首个独立安全审查执行因 `Claude API unknown.` 中断，仅有勘察、没有审查结论，不能记为通过或产品缺陷；已用新独立上下文对主集成树 B 产品重做同范围首轮审查，不扩大到 A/Electron，也不继承任何通过结论。
 - B2 最终作者证据：store 135/135 场景、529 assertions、另 skip 3；lock 14/14、103 assertions、skip 0；maintenance 20/20、119 assertions、skip 0；performance 默认 16/16 assertions、skip 0；相邻 storage metadata 1/1。原有断言未减少。其同口径性能新样本以 P1 `dfdc1dde` 为 before：三轮 6723.485/6898.081/6823.011ms，中位 6823.011；B2 三轮 3990.662/3735.489/3337.113ms，中位 3735.489。每轮历史 HTML 读取 268616500/268879092/269141684 B→65648 B；同 digest、64 份 33554496 B、8 sessions、每轮 8×4103 B、每侧 26 assertions。旧 5449.461→2627.149ms 仅为历史，不混用。Win/Linux gate 支持不代表 Linux 实机/网络共享存储已验证，其他 OS fail-closed。
 - B3 最终同树组合 backend/model/branches 为 63/63、exit 0、9216.1951ms；branches 17/17、372 实际断言、8623.2296ms，skip/fail/cancel/todo 0；相邻 target 20/20、service 49/49、HTTP 11/11。**该证据包含 B2 当前未提交产品树，不证明单独获取测试提交后的主集成树已通过**；必须取得 B2 产品提交后在主树补验。
+- B2 验收文档 `df866d7a` 集成为 `597d8335`；D2 验收文档 `081b32ea` 集成为 `20e67cfa`。E3 交付：canonical 362→366 叶（原 362 全保留、新增 4、删除/重复/换组 0），守卫 15/15；一次十六叶离线 Artifact 子链全部 exit 0（各套件计数详见 E 验收 §10）；测试链 `403e0cf9`，文档 `55c0b82f`。**完整 canonical 仍待当前 PR CI。**
+
+### R-B 首轮独立安全审查（重试后完成）
+
+- 审查范围为主集成树 B 产品（HEAD `e4468695`），结论 **不通过，Important 1**：I1「恢复入口在自身锁释放失败时仍确认成功」。`server/html-artifact-store.js` 的 release 吞掉 `ownedUnlink` 失败（约 186 行），`recoverLock()`（约 481 行）在自身 `.writer.lock` 删除失败时仍返回 `{ok:true}`；`server.js` 启动恢复（约 465 行）与维护入口同样报假成功。实证：注入一次 EACCES 后 live owner 的锁残留，后续 read/recoverLock 永久 busy（owner 存活，身份门控不能合法清除）；快照无损坏/丢失，但可用性卡死且 API 撒谎。历史：基线 publish 在 `dfdc1dde` 已吞释放错误，新增暴露面是 recovery API/startup/maintenance 的假成功。
+- 证据：`C:/Users/21022/AppData/Local/Temp/pi-b-review-aewurq/review-report.md`、`manifest-end.json`、`probe-results.json`；探针 8 场景 7 pass/1 fail，累计 78/79 断言；30 个被审文件在审查期间变化 0。
+- 审查者另记录：直接 `store.collect({releasePending:true})` 可删除 pending 快照，Store 自身不强制 candidates-only；生产中维护入口强制 dry-run、Reconciler 无 provider 即退出，信任调用者契约成立，**不计为已确认绕过**，但属设计边界。
+- 修复要求：「已确认自身锁但释放失败」必须返回固定脱敏失败，不得报成功；不得引入 force-unlock 或放宽身份门控。已派 **B4** 在原 B 工作树修复并补回归；修复须经独立增量复审后 I1 才可关闭。
+
+### C 线交接
+
+- 原 C 代理命中模型服务 100 轮上限死亡（runs 2–5 均失败，不得重启）。其工作树留有未提交的 RD-2/RD-3 半成品（viewer/dialog/interactions 约 +62/-12），无任何完成证据。已派 **C2** 接手同一工作树：评估半成品、按 D2 唯一契约完成消费端、补 T3 对照、>4096px 真实正常沙箱 Electron 全屏往返良性证明与验收文档。A2（真实 Pi 驱动与模型闭环准备）、E3 后续登记仍在各线进行；E3 首节交付见上。
 
 ## 子 Agent 文件所有权
 
