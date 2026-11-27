@@ -1,6 +1,7 @@
 /* Reconstruct a P5 view from an authorized native path and persisted metadata.
  * The sidecar proves boundaries; content is read from Pi every time. */
 import { activePath } from './session-edit-target.js';
+import { projectHtmlArtifacts } from './html-artifact-projection.js';
 import { readSessionText } from './session-history.js';
 import { sessionMessageBody } from './pi-compat.js';
 import { matchExecutionTimelineRecords } from './execution-timeline-store.js';
@@ -131,7 +132,7 @@ export function projectExecutionHistory(entries, records, { sessionId, leafId, c
     rows.push(row);
     rowById.set(row.id, row);
   }
-  const raw = rows.map(row => row.body);
+  const raw = rows.map(row => projectHtmlArtifacts(row.body));
   if (classic && Buffer.byteLength(JSON.stringify(raw)) > MAX_BODY_BYTES) return null;
   const ambiguous = classic ? repeatedCalls(raw) : null;
   const sourceById = new Map();

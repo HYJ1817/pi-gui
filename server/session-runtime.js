@@ -25,6 +25,9 @@ import { createExecutionToolProjection, executionSubmission, readExecutionBranch
   projectRuntimeEntry, projectRuntimeEntryRead } from './execution-timeline.js';
 import { safeToolName, usageProjection } from '../public/runtime-timeline.js';
 import { safeFallbackFailure } from '../lib/model-fallback.js';
+import { createHtmlRenderBridge } from './html-render-bridge.js';
+import { projectHtmlArtifacts, projectHtmlToolResult } from './html-artifact-projection.js';
+import { htmlArtifactFromToolResult } from '../public/html-artifact-model.js';
 
 const fail = code => Object.assign(Error(code), { code });
 // This narrow surface projects tool activity. Raw args/result/worker diagnostics
@@ -43,7 +46,8 @@ function projectedMessage(msg) {
   if (!msg || typeof msg !== 'object' || Array.isArray(msg) || !MESSAGE_ROLES.has(msg.role)) return null;
   if (msg.role === 'toolResult') {
     return { role: msg.role, toolCallId: validWireId(msg.toolCallId) ? msg.toolCallId : undefined,
-      toolName: safeToolName(msg.toolName), isError: msg.isError === true, content: [] };
+      toolName: safeToolName(msg.toolName), isError: msg.isError === true, content: [],
+      ...(msg.toolName === 'html_render' ? projectHtmlToolResult(msg) : {}) };
   }
   const out = { role: msg.role };
   if (msg.role !== 'assistant' && msg.role !== 'user') return out;
@@ -81,6 +85,7 @@ function projectedMessage(msg) {
   return out;
 }
 export function projectRuntimeEvent(event, activity = null) {
+  event = projectHtmlArtifacts(event);
   if (event?.type === 'response' && event.success === false && ['set_thinking_level', 'cycle_thinking_level'].includes(event.command)) {
     const response = { type: 'response', command: event.command, success: false, error: 'Pi 未能完成思考级别操作；请检查模型配置后重试。' };
     if (typeof event.id === 'string' || typeof event.id === 'number') response.id = event.id;
@@ -101,6 +106,9 @@ export function projectRuntimeEvent(event, activity = null) {
       ? projectPlanArgs(event.toolName, event.args)
       : event.type === 'tool_execution_end' ? projectPlanResult(event.result) : null;
     if (plan) out.plan = plan;
+    if (event.type === 'tool_execution_end' && event.isError !== true && htmlArtifactFromToolResult(event.result)) {
+      out.result = projectHtmlToolResult(event.result);
+    }
     if (activity) out.activity = activity;
     return out;
   }
@@ -167,7 +175,7 @@ export function projectRuntimeEvent(event, activity = null) {
 export async function createSessionRuntime({ context, emit, piBin = 'pi', env = process.env, dataDir,
   guiPort = () => null, browser = null, processAdmission = () => true, readModelsConfig = () => null,
   sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor, createChanges = null, mutationAdmission = null, toolScheduler = null, candidateAudit = null,
-  captureProviderLaunch = null } = {}) {
+  captureProviderLaunch = null, htmlArtifactStore = null, htmlPublication = null } = {}) {
   const runtime = createRuntime({ initialCwd: context.cwd });
   const launch = createPiLaunch({ piBin, env, getCwd: () => context.cwd });
   const entry = launch.cliEntry();
@@ -205,6 +213,13 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
   const toolGuard = toolScheduler ? createSessionToolBridge({scheduler:toolScheduler,launch,getCwd:()=>context.cwd,getRoot:()=>context.workspace.root,
     readState:()=>rpc.request({type:'get_state'},{timeoutMs:1000,strict:true}),capture:captureGuard,isCurrent:guardCurrent,
     canRevalidate:(previous,witness) => guardAdvance(previous,witness) && guardCurrent(witness),onEvent:emit,audit:candidateAudit}) : null;
+  const htmlBridge = htmlArtifactStore ? createHtmlRenderBridge({ store: htmlArtifactStore, publication: htmlPublication,
+    launch, getCwd: () => context.cwd, capture: captureGuard, isCurrent: guardCurrent,
+    scopeForWitness: witness => ({ kind: 'runtime', owner: { ...witness.owner, sessionId: witness.sessionId } }),
+    canRevalidate: (previous, witness) => guardAdvance(previous, witness) && guardCurrent(witness),
+    readState: () => rpc.request({ type: 'get_state' }, { timeoutMs: 1500, strict: true }),
+    readEntries: () => rpc.request({ type: 'get_entries' }, { timeoutMs: 1500, strict: true }),
+  }) : null;
   const planBridge = createPlanBridge();
   const editLaunch = createMessageEditLaunch();
   const messageEdit = createMessageEditService({ publish: event => emit(event) });
@@ -230,7 +245,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     autoRestart: false,
     env: { ...env, ELECTRON_RUN_AS_NODE: '1', PI_NO_CONTINUE: '1' }, projectLaunch: launchOptions,
     browserLaunch: browser, processLaunch: managed, sessionChangeLaunch: changes, toolLaunch: toolGuard, planLaunch: planBridge,
-    editLaunch,
+    editLaunch, htmlLaunch: htmlBridge,
     spawnProcess: (_command, args, opts) => supervisor.spawnProcess(node, [...entry.baseArgs, ...args], { ...opts, shell: false }),
     killProcessTree: supervisor.killProcessTree,
     captureProviderLaunch: captureProviderLaunch && (scope => captureProviderLaunch(scope, launch, entry)),
@@ -390,7 +405,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
       disposed = true; runtime.setShuttingDown(true); rpc.stop();
       try { messageEdit.dispose(); } catch { /* observation only */ }
       disposal = (async () => {
-        await Promise.all([supervisor.dispose(), managed.dispose(), browser?.dispose?.(), changes?.dispose(), toolGuard?.dispose()]);
+        await Promise.all([supervisor.dispose(), managed.dispose(), browser?.dispose?.(), changes?.dispose(), toolGuard?.dispose(), htmlBridge?.dispose()]);
         changes?.confirmWritersStopped();
         toolGuard?.confirmCleanup();
         if (promptFile) { try { fs.rmSync(promptFile,{force:true});fs.rmdirSync(promptDir); } catch { /* only owned temporary prompt files */ } }

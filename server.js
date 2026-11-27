@@ -104,6 +104,11 @@ import { createExecutionTimelineStore } from './server/execution-timeline-store.
 import { projectExecutionHistory, readStoredExecutionHistory, runtimeExecutionIdentity } from './server/execution-timeline-history.js';
 import { createRuntimeRoutes } from './server/runtime-routes.js';
 import { createSessionRuntime } from './server/session-runtime.js';
+import { createHtmlArtifactStore } from './server/html-artifact-store.js';
+import { createHtmlRenderBridge } from './server/html-render-bridge.js';
+import { projectHtmlArtifacts, createHtmlArtifactProjection } from './server/html-artifact-projection.js';
+import { createHtmlArtifactHttp, createHtmlArtifactAuthority } from './server/html-artifact-http.js';
+import { createHtmlArtifactReconciler } from './server/html-artifact-sessions.js';
 import { createCandidateRuns } from './server/candidate-runs.js';
 import { createCandidateRoutes } from './server/candidate-routes.js';
 import { createRuntimeBrowserGateway } from './server/runtime-browser-launch.js';
@@ -450,8 +455,12 @@ let primarySessionWitnessEpoch = null;
 let classicExecutionEpoch = 0;
 let classicExecutionWitness = null;
 let classicExecutionTools = createExecutionToolProjection();
+const classicHtmlProjection = createHtmlArtifactProjection();
 let classicHistoryRevision = 0;
 const executionTimelineStore = createExecutionTimelineStore({ dataDir: DATA_DIR });
+const htmlArtifactStore = createHtmlArtifactStore({ dataDir: DATA_DIR });
+let htmlReconciler = null;
+const htmlPublication = { begin: () => htmlReconciler?.begin() };
 const classicExecutionIdentity = scope => ({ kind: 'classic', workspaceId: scope.workspaceKey, sessionId: scope.sessionId });
 const classicExecutionCapture = createExecutionTimelineCapture({
   store: executionTimelineStore,
@@ -501,7 +510,9 @@ function publishClassicExecution(event) {
   const frame = { ...event, activity: activity || undefined, detailRef: undefined,
     legacyOwner, executionClassic: { branchEpoch: classicExecutionEpoch, sessionId,
       observedAt, ...(sessionBound ? { sessionBound: true } : {}) } };
-  sse.publish(frame);
+  const outbound = classicHtmlProjection(frame);
+  sse.publish(outbound);
+  frame._seq = outbound._seq;
   try {
     classicExecutionCapture.observe(event, { observedAt, sequence: frame._seq });
     if (sessionId && !piActivity.busy() && (!previous || sessionBound
@@ -555,6 +566,20 @@ const primaryToolGuard = createSessionToolBridge({scheduler:toolScheduler,launch
   isInitializing:(previous,witness) => primaryToolAdvance(previous,witness) && primaryToolCurrent(witness,true) && rpc.providerSessionPending(),
   onEvent:publishClassicExecution});
 const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
+const htmlRenderBridge = createHtmlRenderBridge({ store: htmlArtifactStore, publication: htmlPublication,
+  launch: piLaunch, getCwd: () => runtime.getCurrentCwd(),
+  readState: () => rpc.request({ type: 'get_state' }, { strict: true, timeoutMs: 1500 }),
+  readEntries: () => rpc.request({ type: 'get_entries' }, { strict: true, timeoutMs: 1500 }),
+  capture: sessionId => {
+    const state = rpc.getState(), sessionEpoch = rpc.providerSessionEpoch();
+    return { owner: primaryToolOwner(sessionEpoch), sessionId, cwd: runtime.getCurrentCwd(), sessionEpoch,
+      bridgeInstance: state.bridgeInstance, bridgeRun: state.bridgeRun, pid: state.pid };
+  },
+  isCurrent: primaryToolCurrent,
+  scopeForWitness: witness => ({ kind: 'classic', bridgeInstance: witness.bridgeInstance, bridgeRun: witness.bridgeRun,
+    workspaceKey: witness.owner.workspaceId, workspaceGeneration: Number(witness.owner.workspaceEpoch), sessionId: witness.sessionId }),
+  canRevalidate: (previous, witness) => primaryToolAdvance(previous, witness) && primaryToolCurrent(witness),
+});
 const guiBrowserLaunch = createGuiBrowserLaunch({ launch: piLaunch });
 const planBridge = createPlanBridge();
 const messageEditLaunch = createMessageEditLaunch();
@@ -673,6 +698,7 @@ const rpc = createRpcBridge({
   toolLaunch: primaryToolGuard,
   planLaunch: planBridge,
   editLaunch: messageEditLaunch,
+  htmlLaunch: htmlRenderBridge,
 });
 
 /* 安装完成后重新解析入口。start 合并已在启动或运行的桥；没有项目就延迟。 */
@@ -1513,7 +1539,7 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
     let adapter;
     try { adapter = await createSessionRuntime({ context, emit, piBin: effectivePiBin, env: process.env, dataDir: DATA_DIR,
       guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig, mutationAdmission, toolScheduler,
-      captureProviderLaunch,
+      captureProviderLaunch, htmlArtifactStore, htmlPublication,
       candidateAudit: context.workspace.branch?.startsWith('pi-gui/t4b/') ? event => candidateRunsRef?.audit(context.getOwner(),event) : null,
       createChanges: ({ launch, context, requestState }) => createSessionChangeBridge({ store: getEvidenceStore, launch,
         admission: mutationAdmission, inspectFileMetadata, inspectObjectEvidence:observeFileObject,
@@ -1549,6 +1575,19 @@ const runtimeRoutes = createRuntimeRoutes({ registry: runtimeRegistry,
    * Renderer 只给 conversationId —— 不接受任何来自前端的路径。 */
   readHistory: (locator, target) => readStoredExecutionHistory(locator, target,
     executionTimelineStore.list(runtimeExecutionIdentity(target.locator))) || readSessionMessages(locator, { expected: target }) });
+const htmlArtifacts = createHtmlArtifactHttp({ store: htmlArtifactStore, resolveScope: createHtmlArtifactAuthority({
+  registry: runtimeRegistry, sessions, getClassicOwner: primaryOwner,
+  getClassicCwd: () => runtime.getCurrentCwd(), readClassicBranch: classicExecutionBranch,
+}) });
+htmlReconciler = createHtmlArtifactReconciler({ store: htmlArtifactStore, roots: () => {
+  const snapshot = runtimeRegistry.snapshot();
+  if (!snapshot.ok) throw Error('registry_unavailable');
+  return [...sessions.artifactSessionRoots(), ...snapshot.items.map(item => runtimeRegistry.historyTarget(item.conversationId)?.sessionLocator).filter(Boolean)];
+} });
+// Temporary-file recovery does not authorize snapshot collection. Native Pi
+// append/branch/copy writers do not share the store lock, so automatic GC stays
+// disabled until their exclusion can be held through the collect commit.
+void htmlArtifactStore.cleanupTemporary().catch(() => {});
 const runtimeHealthTimer = setInterval(() => { void runtimeRegistry.healthCheck().catch(() => {}); }, 5000);
 runtimeHealthTimer.unref();
 
@@ -1587,8 +1626,8 @@ async function serveClassicExecutionHistory(req, res) {
     // The old response is the content boundary, including its compaction semantics.
     // Equality fences the complete native interval; no individual message is paired by text.
     if (!current() || !Array.isArray(raw?.messages)
-        || JSON.stringify(raw.messages) !== JSON.stringify(history.messages)) return unavailable();
-    return json(res, 200, { ...history, owner: primaryOwner(), branchEpoch, messages: raw.messages });
+        || JSON.stringify(projectHtmlArtifacts(raw.messages)) !== JSON.stringify(history.messages)) return unavailable();
+    return json(res, 200, { ...history, owner: primaryOwner(), branchEpoch, messages: projectHtmlArtifacts(raw.messages) });
   } catch { return unavailable(); }
 }
 
@@ -1824,6 +1863,7 @@ const route = createRouter({
   } },
   runtimeSessions: runtimeRoutes,
   classicExecutionHistory: serveClassicExecutionHistory,
+  htmlArtifacts,
   messageEdit: messageEditRoutes,
   legacyScope: primaryOwner,
   requireLegacyScope: () => runtimeRegistry.liveCount() > 0,
@@ -2018,6 +2058,8 @@ if (process.send) process.on('message', async message => {
 async function shutdown() {
   if(runtime.isShuttingDown())return;
   runtime.setShuttingDown(true);
+  await htmlReconciler.dispose();
+  await htmlRenderBridge.dispose();
   /* Await cancellation and the job's staging cleanup before closing the process. */
   await environmentInstall.dispose();
   await terminal.dispose();

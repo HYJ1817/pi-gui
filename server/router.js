@@ -131,6 +131,7 @@ export function createRouter({
   worktrees = null,
   runtimeSessions = null,
   classicExecutionHistory = null,
+  htmlArtifacts = null,
   messageEdit = null,
   reviewComments = null,
   collabDocuments = null,
@@ -223,6 +224,10 @@ export function createRouter({
       return environment.handle(req, res, url);
     }
     if (url.pathname === '/api/runtime-sessions') return runtimeSessions ? runtimeSessions.handle(req, res) : json(res,503,{ok:false,code:'runtime_unavailable'});
+    // Scope authority belongs to the artifact reader, not the focused Classic chat.
+    if (url.pathname === '/api/html-artifacts/read') {
+      return htmlArtifacts ? htmlArtifacts.handle(req, res) : json(res, 409, { ok: false, code: 'reference_pending' });
+    }
     if (url.pathname === '/api/execution-history') {
       return classicExecutionHistory ? classicExecutionHistory(req, res) : json(res, 409, { ok: false, code: 'history_unavailable' });
     }
