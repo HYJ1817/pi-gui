@@ -232,10 +232,14 @@ test('desktop security workflow is manual, read-only, fail-closed and never a mo
   assert.doesNotMatch(content, /(?:contents|actions|id-token): write|secrets\.|continue-on-error|--no-sandbox|--live|--disable-web-security/);
   assert.match(content, /runs-on: windows-latest/);
   assert.match(content, /persist-credentials: false/);
+  assert.doesNotMatch(content.slice(0, content.indexOf('    steps:')), /\$\{\{\s*runner\./,
+    'runner context is unavailable in workflow/job-level env');
+  assert.match(content, /steps:\s*\n\s+- name: Prepare fresh fixture evidence directory\s*\n\s+shell: pwsh\s*\n\s+env:\s*\n\s+FIXTURE_TEMP: \$\{\{ runner\.temp \}\}\/visual-replies-security-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/);
   for (const name of ['TEMP', 'TMP', 'TMPDIR']) {
-    assert.ok(content.includes(`${name}: \${{ runner.temp }}/visual-replies-security-\${{ github.run_id }}-\${{ github.run_attempt }}`));
+    assert.ok(content.includes(`"${name}=$env:FIXTURE_TEMP" >> $env:GITHUB_ENV`),
+      `persist ${name} for subsequent steps through GITHUB_ENV`);
   }
-  assert.match(content, /New-Item -ItemType Directory -Path "\$env:TEMP"[^\n]*-ErrorAction Stop/);
+  assert.match(content, /New-Item -ItemType Directory -Path "\$env:FIXTURE_TEMP"[^\n]*-ErrorAction Stop/);
   const prepareTemp = content.indexOf('New-Item -ItemType Directory');
   for (const dependent of ['uses: actions/checkout', 'uses: actions/setup-node', 'run: npm ci', 'run: node scripts/prepare-electron-ci.mjs']) {
     assert.ok(prepareTemp < content.indexOf(dependent), `create the job TEMP before ${dependent}`);
