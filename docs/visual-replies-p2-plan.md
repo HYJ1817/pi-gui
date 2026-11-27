@@ -57,11 +57,16 @@
 - C 首轮正常沙箱良性 UI 报 22 checks、9 截图，生产 main/preload/native 注册、四组宽窄深浅及 DPR 1.5；证据 `C:/Users/21022/AppData/Local/Temp/pi-visual-replies-zhKjh1/evidence/viewer.json`。其中样例约 4008px，**不能覆盖 RD-3 的 >4096px 场景**；修后须补相应良性回归及增量独立复审，不能沿用本次通过数字。
 - 新增 D2 在原 D 工作树修复 RD-1/RD-4，并与 C 对齐最小协议：resize 可选 `feedback:boolean`；仅显式 false 才消费原始 naturalHeight，true 保持全屏高度，缺字段 v1 仅采用 height。presentation/presentation-ready 均严格六字段 schemaVersion/id/nonce/type/expanded/sequence（正安全整数）；true 在本 realm 同步保存后 ACK，C 等 ACK 后才改几何；false 先恢复内联几何，再由 frame 双原生 rAF 恢复内部滚动后 ACK，不受受控 runtime 暂停影响。该契约待实现与回归，不等于发现已修复。超时/过期 ACK 不得继续切换几何或污染下一次展开。
 - D2 首个产品候选修复 `6989cecc82a737414e692573a25fc364b8d17534` 已集成为 `fd88630d`（measurement/feedback、layout 字段保留、frame presentation 握手）。作者的接口 Node 过滤测试仅 6/6、skip 0、601.1942ms；新增测试尚未提交，RD-4 及真实 Chromium/正常沙箱验证仍待完成。C 消费端还在修改，不能把本次仅生产端集成算作完整握手或 RD 发现验收通过。
+- D2 后续 `bcd0fa9b125691d4b381fda66c4983b4ecfe775a`、`96818f9f88211b24589566b58e9b7a800fb08e03` 依序集成为 `321ce11d`、`45135b80`：原生 long 句柄转换及 timer 清理互换、rAF 类别分离，新增六项回归，未删除旧断言。D 作者的修前新回归 26/32、fail 6/skip 0，以及其旧 UI+D 联合 57/57，均单列，不冒充主树运行。
+- 主 Agent 在行为 HEAD `45135b80`、Windows/既有 Node 环境、`NODE_PATH=C:/pi-GUI/node_modules` 实际执行 `node --test --test-reporter=spec tests/html-artifact-layout.cjs tests/html-artifact-frame.cjs tests/html-artifact-reading.cjs`（使用三个主树绝对路径）：**44 pass / fail 0 / skip 0 / cancel 0 / todo 0、exit 0、1018.5402ms**。仅证明三个 Node 专属套件；不证明 C 消费端、真实过渡渲染/原生内部滚动或正常沙箱，四项发现仍待修后完整证据与独立增量复审。
 - 最多三轮审查原则不变，未修复 Important 不得验收通过。
 
 ### B3 测试交付依赖
 
-- 测试提交 `2cd34ec2e855c71364e4b58ca78dc642347b6832` 仅含 branches 套件及专属 fixture，尚待与 B2 产品改动成组集成；新增叶为 `node --test tests/html-artifact-branches.cjs`，fixture 不注册。
+- B3 测试 `2cd34ec2e855c71364e4b58ca78dc642347b6832` 已随 B2 产品成组集成为 `4094729c`，仅获取一次。B2 按依赖顺序映射：`5b69c52a`→`e90bfcf9`（Store/lock）、`00e22156`→`fcaaee59`（Classic scope）、`d009d05b`→`441bcfc5`（候选维护/统计/接入）、`23e82c91`→`4649ac53`（专项测试）。集成 diff check exit 0；当前不是独立安全或主树测试通过结论。
+- 新增 branches 叶为 `node --test tests/html-artifact-branches.cjs`，另三个 B2 叶为 `node tests/html-artifact-lock.cjs`、`node tests/html-artifact-maintenance.cjs`、`node tests/html-artifact-performance.cjs`；fixture、benchmark/baseline 参数不注册到默认 CI。E3 已接手 package 唯一测试链、守卫和主树一次离线 Artifact 子链回归，完整 canonical 仍待当前 PR CI。
+- B 首轮独立功能静态审查有条件通过：Blocker 0 / Important 0 / Nit 0，Pre-existing 范围差异 1；未实跑功能测试，七个主审文件在作者提交前后摘要变化 0/7，不能将作者数字冒称审查者实测。锁/GC/维护故障的首个独立安全审查执行因 `Claude API unknown.` 中断，仅有勘察、没有审查结论，不能记为通过或产品缺陷；已用新独立上下文对主集成树 B 产品重做同范围首轮审查，不扩大到 A/Electron，也不继承任何通过结论。
+- B2 最终作者证据：store 135/135 场景、529 assertions、另 skip 3；lock 14/14、103 assertions、skip 0；maintenance 20/20、119 assertions、skip 0；performance 默认 16/16 assertions、skip 0；相邻 storage metadata 1/1。原有断言未减少。其同口径性能新样本以 P1 `dfdc1dde` 为 before：三轮 6723.485/6898.081/6823.011ms，中位 6823.011；B2 三轮 3990.662/3735.489/3337.113ms，中位 3735.489。每轮历史 HTML 读取 268616500/268879092/269141684 B→65648 B；同 digest、64 份 33554496 B、8 sessions、每轮 8×4103 B、每侧 26 assertions。旧 5449.461→2627.149ms 仅为历史，不混用。Win/Linux gate 支持不代表 Linux 实机/网络共享存储已验证，其他 OS fail-closed。
 - B3 最终同树组合 backend/model/branches 为 63/63、exit 0、9216.1951ms；branches 17/17、372 实际断言、8623.2296ms，skip/fail/cancel/todo 0；相邻 target 20/20、service 49/49、HTTP 11/11。**该证据包含 B2 当前未提交产品树，不证明单独获取测试提交后的主集成树已通过**；必须取得 B2 产品提交后在主树补验。
 
 ## 子 Agent 文件所有权
