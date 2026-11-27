@@ -8,6 +8,12 @@ const functions = {
       artifacts: [...document.querySelectorAll('.html-artifact')].map(n => ({ id: n.dataset.artifactId, state: n.dataset.state })),
       followup: [...document.querySelectorAll('.assistant-text')].some(n => /OFFLINE_FIXTURE_FOLLOWUP|VR_LIVE_FOLLOWUP/.test(n.textContent)) };
   },
+  visitPendingArtifact() {
+    // Like a user browsing the timeline: distant references stay lazy until
+    // visited. Never manufacture IO delivery or relax the ready assertions.
+    const node = [...document.querySelectorAll('.html-artifact')].find(n => n.dataset.state !== 'ready');
+    node?.scrollIntoView({ block: 'center', behavior: 'instant' });
+  },
   point(selector) {
     const e = document.querySelector(selector); if (!e) throw Error('target_missing');
     e.scrollIntoView({ block: 'center', behavior: 'instant' }); const r = e.getBoundingClientRect();
@@ -170,6 +176,7 @@ async function start() {
         await read(functions.beginObservation);
         await submit(prompt);
         await until(async () => {
+          await read(functions.visitPendingArtifact);
           const s = await read(functions.state);
           return !s.streaming && s.artifacts.length === index + 1 && s.artifacts.every(x => x.state === 'ready') && s.followup;
         }, 'artifact-' + row.id, mode === 'live' ? 240000 : 30000);
@@ -189,14 +196,14 @@ async function start() {
       check('session-switch-clears-old-artifacts', true);
       await read(functions.refreshSessions);
       await click('.pj-sess[data-session-id="' + original + '"] .pj-sess-primary');
-      await until(async () => { const s = await read(functions.state); return s.owner?.sessionId === original && s.artifacts.length === samples.length && s.artifacts.every(x => x.state === 'ready'); }, 'session-return');
+      await until(async () => { await read(functions.visitPendingArtifact); const s = await read(functions.state); return s.owner?.sessionId === original && s.artifacts.length === samples.length && s.artifacts.every(x => x.state === 'ready'); }, 'session-return');
       check('session-return-native-artifacts', true);
     } else {
       const saved = JSON.parse(fs.readFileSync(checkpoint, 'utf8')); original = saved.sessionId;
       await read(functions.refreshSessions);
       if ((await read(functions.state)).owner.sessionId !== original)
         await click('.pj-sess[data-session-id="' + original + '"] .pj-sess-primary');
-      await until(async () => { const s = await read(functions.state); return s.artifacts.length === samples.length && s.artifacts.every(x => x.state === 'ready'); }, 'restart-native-artifacts');
+      await until(async () => { await read(functions.visitPendingArtifact); const s = await read(functions.state); return s.artifacts.length === samples.length && s.artifacts.every(x => x.state === 'ready'); }, 'restart-native-artifacts');
       check('restart-native-ref-identities', JSON.stringify((await read(functions.state)).artifacts.map(x => x.id)) === JSON.stringify(saved.ids));
       check('restart-followup-text', (await read(functions.state)).followup);
       for (const row of samples) { await interact(row); await shot(row.id + '-restored-interaction'); }
