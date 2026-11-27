@@ -188,7 +188,9 @@ async function check(name, action) { await action(); checks++; console.log('  ok
       const res = await response({ artifactStats: () => ({ ...stats, html: 'PRIVATE', path: f.root,
         limits: { ...stats.limits, secret: 'PRIVATE' } }) });
       assert.equal(res.status, 200); assert.equal(res.headers['Cache-Control'], 'no-store');
-      assert.deepEqual(res.body.storage.htmlArtifacts, { status: 'known', ...stats });
+      const { capacity, maintenance, ...reported } = res.body.storage.htmlArtifacts;
+      assert.deepEqual(reported, { status: 'known', ...stats });
+      assert.equal(capacity.code, 'within_reported_limits'); assert.equal(maintenance.snapshotDeletion, false);
       assert.equal(JSON.stringify(res.body).includes('PRIVATE'), false);
       for (const value of [() => { throw Error('PRIVATE ' + f.root); }, () => ({ count: 0 }),
         () => ({ ...stats, bytes: -1 }), () => ({ ...stats, pending: NaN })]) {
@@ -308,7 +310,9 @@ async function check(name, action) { await action(); checks++; console.log('  ok
       };
       const store = createHtmlArtifactStore({ dataDir: f.dataDir, io });
       const failed = await response({ artifactStats: () => store.stats() });
-      assert.deepEqual(failed.body.storage.htmlArtifacts, { status: 'unknown', code: 'html_store_unavailable' });
+      const { maintenance, ...unknown } = failed.body.storage.htmlArtifacts;
+      assert.deepEqual(unknown, { status: 'unknown', code: 'html_store_unavailable' });
+      assert.equal(maintenance.snapshotDeletion, false);
       assert.equal(JSON.stringify(failed.body).includes('PRIVATE'), false);
       assert.equal(fs.existsSync(path.join(f.root, '.writer.lock')), true);
       const retried = await response({ artifactStats: () => store.stats() });
@@ -329,6 +333,125 @@ async function check(name, action) { await action(); checks++; console.log('  ok
         await new Promise(resolve => setImmediate(resolve));
         assert.deepEqual(warnings, [[code.startsWith('html_artifact_storage_') ? code : 'html_artifact_storage_failed']]);
       }
+    });
+    await check('capacity statistics expose session high-water numbers without native session identities', async () => {
+      const f = await fixture();
+      await f.store.publish(input({ messageId: 'second' }));
+      await f.store.publish(input({ sessionId: 'other-private-session', html: '<p>' + 'x'.repeat(2048) + '</p>' }));
+      const stats = await f.store.stats(), usage = new Map();
+      for (const name of fs.readdirSync(f.root)) {
+        const dir = path.join(f.root, name), ref = JSON.parse(fs.readFileSync(path.join(dir, 'reference.json')));
+        const previous = usage.get(ref.sessionId) || { count: 0, bytes: 0 };
+        previous.count++;
+        previous.bytes += fs.readdirSync(dir).reduce((sum, file) => sum + fs.statSync(path.join(dir, file)).size, 0);
+        usage.set(ref.sessionId, previous);
+      }
+      assert.equal(stats.sessionMaxCount, 2);
+      assert.equal(stats.sessionMaxBytes, Math.max(...[...usage.values()].map(value => value.bytes)));
+      assert.equal(JSON.stringify(stats).includes('other-private-session'), false);
+      assert.equal(JSON.stringify(stats).includes(f.ref.id), false);
+      const emptyDir = path.join(world, 'empty-capacity'); fs.mkdirSync(emptyDir);
+      const empty = await createHtmlArtifactStore({ dataDir: emptyDir }).stats();
+      assert.equal(empty.sessionMaxBytes, 0); assert.equal(empty.sessionMaxCount, 0);
+      assert.deepEqual(fs.readdirSync(emptyDir), []);
+    });
+    await check('production stats and CLI truthfully advertise disabled snapshot GC and existing explicit maintenance', async () => {
+      const f = await fixture(), before = snapshot(f.root);
+      const result = await f.run(['--action', 'stats']);
+      assert.equal(result.ok, true);
+      const policy = result.maintenance;
+      assert.equal(policy.mode, 'candidates-only');
+      assert.equal(policy.automaticCollection, false); assert.equal(policy.snapshotDeletion, false);
+      assert.equal(policy.code, 'native_mutation_unproven');
+      assert.deepEqual(policy.inspectionActions, ['stats', 'plan']);
+      assert.deepEqual(policy.offlineActions, ['recover-lock', 'cleanup-temporary']);
+      assert.equal(policy.sourceEntry, 'server/html-artifact-maintenance-cli.js');
+      assert.match(policy.message, /正式快照.*未开放/);
+      assert.match(policy.recovery, /保留.*新.*数据/);
+      assert.deepEqual((await f.run([])).maintenance, policy);
+      for (const artifactStats of [() => result.storage, () => { throw Error('PRIVATE'); }]) {
+        const res = await response({ artifactStats });
+        assert.deepEqual(res.body.storage.htmlArtifacts.maintenance, policy);
+        if (res.body.storage.htmlArtifacts.status === 'known') assert.deepEqual(res.body.storage.htmlArtifacts.capacity, result.capacity);
+      }
+      assert.deepEqual(snapshot(f.root), before);
+      assert.deepEqual(await f.run(['--action', 'collect']), { ok: false, code: 'native_mutation_unproven' });
+    });
+    await check('capacity feedback distinguishes global, per-session and temporary blocks without evicting snapshots', async () => {
+      const f = await fixture(), physical = (await f.store.stats()).bytes, before = snapshot(f.root);
+      for (const key of ['totalBytes', 'totalCount', 'sessionBytes', 'sessionCount']) {
+        const store = createHtmlArtifactStore({ dataDir: f.dataDir, limits: { [key]: key.endsWith('Count') ? 1 : physical } });
+        const res = await response({ artifactStats: () => store.stats() }), capacity = res.body.storage.htmlArtifacts.capacity;
+        assert.equal(capacity.code, 'html_artifact_quota');
+        assert.equal(capacity.globalLimitReached, key.startsWith('total'));
+        assert.equal(capacity.sessionLimitReached, key.startsWith('session'));
+        assert.equal(capacity.publicationBlockedByTemporary, false);
+        assert.match(capacity.message, /不会自动.*快照/);
+        await assert.rejects(store.publish(input({ messageId: 'over-quota' })), error => error.code === 'html_artifact_quota');
+        assert.deepEqual(snapshot(f.root), before);
+      }
+      const store = createHtmlArtifactStore({ dataDir: f.dataDir, limits: { sessionCount: 1 } });
+      const other = await store.publish(input({ sessionId: 'other' }));
+      assert.equal((await store.read(other.id)).html, input().html);
+      const temp = path.join(f.root, '.tmp-' + randomUUID()); fs.mkdirSync(temp);
+      fs.writeFileSync(path.join(temp, 'document.html'), 'uncommitted');
+      const blocked = (await response({ artifactStats: () => store.stats() })).body.storage.htmlArtifacts.capacity;
+      assert.equal(blocked.code, 'temporary_cleanup_required'); assert.equal(blocked.publicationBlockedByTemporary, true);
+      assert.match(blocked.message, /cleanup-temporary/);
+      const owner = createHtmlArtifactMaintenance({ ...f.options, store, offline: true });
+      assert.deepEqual(await owner.run({ action: 'cleanup-temporary' }), { ok: true, removed: 1, retained: 0 });
+      assert.equal((await store.read(f.ref.id)).html, input().html);
+      assert.equal((await store.read(other.id)).html, input().html);
+    });
+    await check('capacity projection never claims publication admission or trusts supplied policy and private fields', async () => {
+      const f = await fixture(), stats = await f.store.stats();
+      const res = await response({ artifactStats: () => ({ ...stats, sessionIds: ['PRIVATE'],
+        capacity: { message: 'PRIVATE', canPublish: true }, maintenance: { snapshotDeletion: true, message: 'PRIVATE' } }) });
+      const info = res.body.storage.htmlArtifacts;
+      assert.equal(info.capacity.code, 'within_reported_limits');
+      assert.equal(info.capacity.remainingBytes, stats.limits.totalBytes - stats.bytes);
+      assert.equal(info.capacity.remainingCount, stats.limits.totalCount - stats.count);
+      assert.match(info.capacity.message, /不保证.*发布/);
+      assert.equal('canPublish' in info.capacity, false);
+      assert.equal(info.maintenance.snapshotDeletion, false);
+      assert.equal(JSON.stringify(info).includes('PRIVATE'), false);
+      const { limits, sessionMaxBytes, sessionMaxCount, ...legacy } = stats;
+      const unknown = (await response({ artifactStats: () => legacy })).body.storage.htmlArtifacts;
+      assert.equal('capacity' in unknown, false);
+      const partial = (await response({ artifactStats: () => ({ ...legacy, limits }) })).body.storage.htmlArtifacts;
+      assert.equal(partial.capacity.sessionLimitReached, null);
+      const over = (await response({ artifactStats: () => ({ ...stats, count: stats.limits.totalCount + 1,
+        bytes: stats.limits.totalBytes + 1 }) })).body.storage.htmlArtifacts;
+      assert.equal(over.capacity.remainingBytes, 0); assert.equal(over.capacity.remainingCount, 0);
+      assert.equal(over.capacity.globalLimitReached, true);
+    });
+    await check('existing authenticated storage GET reports policy but cannot invoke maintenance or accept paths', async () => {
+      const { createRouter } = await import('../server/router.js');
+      const { createAuth } = await import('../server/auth.js');
+      const http = require('node:http'), f = await fixture(), before = snapshot(f.dataDir), token = randomUUID();
+      let router, calls = 0;
+      const server = http.createServer((req, res) => router(req, res));
+      await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+      const port = server.address().port, origin = `http://127.0.0.1:${port}`, headers = { 'x-pi-gui-token': token };
+      router = createRouter({ auth: createAuth({ token, port }), systemStorage: createSystemStorage({
+        dataDir: f.dataDir, piAgentDir: f.agentDir, env: {}, executionMode: 'source-web',
+        artifactStats: () => { calls++; return f.store.stats(); },
+      }) });
+      try {
+        assert.equal((await fetch(origin + '/api/system/storage')).status, 401);
+        assert.equal((await fetch(origin + '/api/system/storage', { headers: { ...headers, origin: 'https://untrusted.invalid' } })).status, 403);
+        assert.equal(calls, 0);
+        const response = await fetch(origin + '/api/system/storage?action=collect&path=PRIVATE', { headers });
+        assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'no-store');
+        const info = (await response.json()).storage.htmlArtifacts;
+        assert.equal(info.maintenance.snapshotDeletion, false); assert.equal(info.capacity.code, 'within_reported_limits');
+        assert.equal(JSON.stringify(info).includes('PRIVATE'), false);
+        for (const method of ['POST', 'DELETE']) {
+          assert.equal((await fetch(origin + '/api/system/storage', { method, headers,
+            body: JSON.stringify({ action: 'collect', path: 'PRIVATE', confirm: true }) })).status, 405);
+        }
+        assert.equal(calls, 1); assert.deepEqual(snapshot(f.dataDir), before);
+      } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
     });
     console.log(`HTML artifact maintenance: ${checks}/${checks} scenarios; assertions=${assertions}; skipped=0`);
   } finally { fs.rmSync(world, { recursive: true, force: true }); }

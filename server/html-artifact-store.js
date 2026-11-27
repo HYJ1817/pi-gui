@@ -520,12 +520,20 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
   async function stats() {
     return safe(() => lock(false, exists => {
       const result = { count: 0, bytes: 0, htmlBytes: 0, pending: 0, temporary: 0,
-        temporaryBytes: 0, limits: { ...quota } };
+        temporaryBytes: 0, sessionMaxBytes: 0, sessionMaxCount: 0, limits: { ...quota } };
       if (!exists) return result;
+      // Transient, lock-held aggregation only. Report high-water numbers, never
+      // native session identifiers or another independently cached quota total.
+      const sessions = new Map();
       for (const name of names()) {
         if (isHtmlArtifactId(name)) {
           const item = disk(name, false);
           result.count++; result.bytes += item.storedBytes; result.htmlBytes += item.artifact.bytes;
+          const session = sessions.get(item.artifact.sessionId) || { bytes: 0, count: 0 };
+          session.bytes += item.storedBytes; session.count++;
+          sessions.set(item.artifact.sessionId, session);
+          result.sessionMaxBytes = Math.max(result.sessionMaxBytes, session.bytes);
+          result.sessionMaxCount = Math.max(result.sessionMaxCount, session.count);
           if (item.pending) result.pending++;
         } else if (TEMP.test(name)) {
           const dir = path.join(root, name); directory(dir);
