@@ -11,6 +11,7 @@ export function projectHtmlPreviewResult(result) {
     && source.schemaVersion === 1 && source.ok === true;
   const details = { kind: 'html_preview', schemaVersion: 1, ok };
   if (ok) {
+    if (source.mode === 'static' || source.mode === 'interactive') details.mode = source.mode;
     for (const key of ['width', 'height', 'contentWidth', 'contentHeight']) {
       if (dimension(source[key])) details[key] = source[key];
     }

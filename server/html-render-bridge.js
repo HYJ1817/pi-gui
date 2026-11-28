@@ -5,6 +5,8 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { materializeDir } from '../lib/assets.js';
 import { json, readRawBody } from './http-utils.js';
 import { readExecutionBranch } from './execution-timeline.js';
+import { HTML_RESOURCE_ERROR_CODES } from './html-resource-policy.js';
+import { HTML_PREVIEW_TOOL } from '../public/html-preview-model.js';
 import { HTML_ARTIFACT_MAX_BYTES, HTML_RENDER_TOOL, htmlArtifactToolDetails,
   normalizeHtmlArtifactHeight, projectHtmlArtifactReference } from '../public/html-artifact-model.js';
 
@@ -43,12 +45,15 @@ function contract(launch) {
   } catch { return false; } // Optional capability must not prevent ordinary Pi startup.
 }
 const CODES = new Set(['invalid_request', 'stale_runtime', 'html_bridge_unavailable', 'html_cancelled',
-  'html_immutable_conflict', 'html_storage_full', 'html_too_large', 'html_store_unavailable']);
+  'html_immutable_conflict', 'html_storage_full', 'html_too_large', 'html_store_unavailable',
+  'html_preview_unavailable', 'html_preview_timeout', 'html_preview_busy', 'html_preview_failed',
+  ...HTML_RESOURCE_ERROR_CODES]);
 
 // One private capability per child launch, never shared with the tool guard or
 // renderer. Native IDs are assertions to verify, not authority supplied by HTTP.
 export function createHtmlRenderBridge({ store, launch, getCwd, readState, readEntries, capture,
-  isCurrent, scopeForWitness, canRevalidate = () => false, supported, readTimeoutMs = 1500, publication = null } = {}) {
+  isCurrent, scopeForWitness, canRevalidate = () => false, supported, readTimeoutMs = 1500, publication = null,
+  preview = null, prepareHtml = null } = {}) {
   let server = null, binding = null, disposed = false, preparing = null;
   const source = () => launch.identityKey?.() ?? launch.packageDir?.();
   function valid(b) {
@@ -80,7 +85,7 @@ export function createHtmlRenderBridge({ store, launch, getCwd, readState, readE
     check(b, witness, epoch);
     if (!state || state.__error || state.sessionId !== native) fail('html_bridge_unavailable');
   }
-  async function declaration(b, body, witness, epoch) {
+  async function declaration(b, body, witness, epoch, tool) {
     const branch = await readExecutionBranch({ scope: scopeForWitness(witness), branchEpoch: epoch,
       readState: () => bounded(b, readState), readEntries: () => bounded(b, readEntries),
       isCurrent: () => { check(b, witness, epoch); return true; },
@@ -88,7 +93,7 @@ export function createHtmlRenderBridge({ store, launch, getCwd, readState, readE
     check(b, witness, epoch);
     if (!branch) fail('html_bridge_unavailable');
     const index = branch.entries.findIndex(row => row.id === body.messageId), entry = branch.entries[index];
-    if (entry?.role !== 'assistant' || !entry.toolCalls?.some(call => call.id === body.toolCallId && call.name === HTML_RENDER_TOOL)) fail('invalid_request');
+    if (entry?.role !== 'assistant' || !entry.toolCalls?.some(call => call.id === body.toolCallId && call.name === tool)) fail('invalid_request');
     // The most recent assistant owns this execution, not an older reused call ID.
     if (branch.entries.slice(index + 1).some(row => ['assistant', 'user'].includes(row.role)
       || row.role === 'toolResult' && row.toolCallId === body.toolCallId)) fail('stale_runtime');
@@ -96,6 +101,10 @@ export function createHtmlRenderBridge({ store, launch, getCwd, readState, readE
   async function route(req, res) {
     const b = binding;
     if (req.method !== 'POST' || req.headers.origin || !b || !same(req.headers['x-pi-gui-html-token'], b.token)) return json(res, 403, { ok: false, code: 'unauthorized' });
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    b.waits.add(cancel);
+    res.once('close', cancel);
     try {
       if (!valid(b)) fail('html_bridge_unavailable');
       let body;
@@ -111,17 +120,39 @@ export function createHtmlRenderBridge({ store, launch, getCwd, readState, readE
         b.native = body.sessionId; b.witness = witness;
         return json(res, 200, { ok: true });
       }
-      if (req.url !== '/publish' || !closed(body, ['sessionId', 'messageId', 'toolCallId', 'title', 'html', 'height'])
+      const isPreview = req.url === '/preview';
+      const keys = ['sessionId', 'messageId', 'toolCallId', 'html', 'height', 'resources'];
+      if ((!isPreview && req.url !== '/publish') || !closed(body, [...keys, ...(isPreview ? ['width', 'theme'] : ['title'])])
         || b.native !== body.sessionId || !identifier(body.messageId) || !identifier(body.toolCallId)
-        || typeof body.title !== 'string' || !body.title.trim() || body.title.length > 160 || /[\x00-\x1f\x7f]/.test(body.title)
-        || typeof body.html !== 'string' || !Buffer.byteLength(body.html) || normalizeHtmlArtifactHeight(body.height) === null) fail('invalid_request');
+        || typeof body.html !== 'string' || !Buffer.byteLength(body.html)) fail('invalid_request');
+      if (isPreview) {
+        if (!preview) fail('html_preview_unavailable');
+        if (body.width !== undefined && (!Number.isInteger(body.width) || body.width < 240 || body.width > 1600)
+          || body.height !== undefined && (!Number.isInteger(body.height) || body.height < 80 || body.height > 4096)
+          || body.theme !== undefined && !['light', 'dark'].includes(body.theme)) fail('invalid_request');
+      } else if (typeof body.title !== 'string' || !body.title.trim() || body.title.length > 160
+        || /[\x00-\x1f\x7f]/.test(body.title) || normalizeHtmlArtifactHeight(body.height) === null) fail('invalid_request');
       if (Buffer.byteLength(body.html) > HTML_ARTIFACT_MAX_BYTES) fail('html_too_large');
-      await declaration(b, body, witness, epoch);
-      if (res.destroyed) fail('html_cancelled');
+      const tool = isPreview ? HTML_PREVIEW_TOOL : HTML_RENDER_TOOL;
+      await declaration(b, body, witness, epoch, tool);
+      if (controller.signal.aborted) fail('html_cancelled');
+      const { resources, ...input } = body;
+      if (resources !== undefined && !prepareHtml) fail('html_resource_unsupported');
+      if (prepareHtml) input.html = await prepareHtml(input.html, resources, { signal: controller.signal });
+      if (controller.signal.aborted) fail('html_cancelled');
+      check(b, witness, epoch);
+      if (isPreview) {
+        const { html, width, height, theme } = input;
+        const result = await preview({ html, width, height, theme }, { signal: controller.signal });
+        if (controller.signal.aborted) fail('html_cancelled');
+        await declaration(b, body, witness, epoch, tool);
+        b.witness = witness;
+        return json(res, 200, result);
+      }
       const finish = publication?.begin?.();
       try {
-        const artifact = projectHtmlArtifactReference(await store.publish(body));
-        await declaration(b, body, witness, epoch);
+        const artifact = projectHtmlArtifactReference(await store.publish(input));
+        await declaration(b, body, witness, epoch, tool);
         check(b, witness, epoch);
         if (res.destroyed) fail('html_cancelled');
         if (!artifact || artifact.sessionId !== body.sessionId || artifact.messageId !== body.messageId || artifact.toolCallId !== body.toolCallId) fail('html_store_unavailable');
@@ -129,9 +160,12 @@ export function createHtmlRenderBridge({ store, launch, getCwd, readState, readE
         return json(res, 200, { ok: true, details: htmlArtifactToolDetails(artifact) });
       } finally { finish?.(); }
     } catch (error) {
-      const code = ({ html_artifact_invalid: 'invalid_request', html_artifact_conflict: 'html_immutable_conflict',
+      const code = controller.signal.aborted ? 'html_cancelled' : ({ html_artifact_invalid: 'invalid_request', html_artifact_conflict: 'html_immutable_conflict',
         html_artifact_quota: 'html_storage_full' })[error?.code] || (CODES.has(error?.code) ? error.code : 'html_store_unavailable');
-      return json(res, 409, { ok: false, code });
+      if (!res.destroyed) return json(res, 409, { ok: false, code });
+    } finally {
+      b.waits.delete(cancel);
+      res.removeListener('close', cancel);
     }
   }
   return {
