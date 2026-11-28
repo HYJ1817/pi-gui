@@ -24,6 +24,12 @@ function validIdentity(value) {
   return false;
 }
 
+function windowsIdentity(value) {
+  if (value.state !== 'found') return { state: value.state === 'gone' ? 'gone' : 'unknown' };
+  const identity = JSON.stringify(['win32', value.creationTimeUtc, processIdentity.normalizeImagePath(value.imagePath)]);
+  return validIdentity(identity) ? { state: 'found', identity } : { state: 'unknown' };
+}
+
 // Never infer identity from PID existence, wall-clock age, or a caller's string.
 // Windows reuses the reviewed creation-time/image probe. Linux adds boot ID and
 // /proc start ticks; unsupported/denied probes remain unknown (including ESRCH
@@ -32,10 +38,7 @@ export function queryHtmlArtifactProcess(pid) {
   if (!Number.isSafeInteger(pid) || pid < 1) return { state: 'unknown' };
   if (process.platform === 'win32') {
     try {
-      const value = processIdentity.queryProcessIdentitySync(pid);
-      if (value.state !== 'found') return { state: value.state === 'gone' ? 'gone' : 'unknown' };
-      const identity = JSON.stringify(['win32', value.creationTimeUtc, processIdentity.normalizeImagePath(value.imagePath)]);
-      return validIdentity(identity) ? { state: 'found', identity } : { state: 'unknown' };
+      return windowsIdentity(processIdentity.queryProcessIdentitySync(pid));
     } catch { return { state: 'unknown' }; }
   }
   if (process.platform === 'linux') {
@@ -52,10 +55,17 @@ export function queryHtmlArtifactProcess(pid) {
   return { state: 'unknown' };
 }
 
-export function htmlArtifactLockOwner(query = queryHtmlArtifactProcess) {
+export async function htmlArtifactLockOwner(query = queryHtmlArtifactProcess) {
   if (!self || query !== queryHtmlArtifactProcess) {
     let value;
-    try { value = query(process.pid); } catch { busy(); }
+    try {
+      // A live process cannot reuse its OWN PID while awaiting this read. Use
+      // the existing bounded async query, not the 2.5 s synchronous quit probe:
+      // cold PowerShell startup must not block RPC/HTTP or need a quit budget.
+      value = query === queryHtmlArtifactProcess && process.platform === 'win32'
+        ? windowsIdentity(await processIdentity.queryProcessIdentity(process.pid))
+        : await query(process.pid);
+    } catch { busy(); }
     if (value?.state !== 'found' || !validIdentity(value.identity)) busy();
     const owner = { version: 2, pid: process.pid, processIdentity: value.identity, nonce: randomUUID() };
     if (query !== queryHtmlArtifactProcess) return owner;

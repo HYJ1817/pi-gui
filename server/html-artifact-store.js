@@ -252,7 +252,10 @@ export function createHtmlArtifactStore({ dataDir, limits = {}, io = fs, checkpo
         if (identity(before.stat) !== identity(after.stat) || !before.bytes.equals(after.bytes)) fail('html_artifact_storage_unsafe');
         ownedUnlink(file, identity(after.stat));
       }
-      bytes = encode(htmlArtifactLockOwner(queryProcess));
+      bytes = encode(await htmlArtifactLockOwner(queryProcess));
+      // Self-identity now yields. Revalidate the physical root/ancestors under
+      // the held kernel gate before creating anything at its pathname.
+      guard();
       try { fd = io.openSync(file, 'wx', 0o600); }
       catch (error) { if (error.code === 'EEXIST') fail('html_artifact_storage_busy'); throw error; }
       expected = identity(io.fstatSync(fd));

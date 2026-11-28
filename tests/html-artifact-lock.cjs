@@ -26,6 +26,20 @@ async function check(name, action) { await action(); checks++; console.log('  ok
   if (process.argv[2] === '--child') {
     const [dataDir, action, barrier] = process.argv.slice(3);
     const emit = value => fs.writeSync(1, JSON.stringify(value) + '\n');
+    if (action === 'cold-self') {
+      const query = processIdentity.queryProcessIdentity;
+      // Observe which reviewed probe is used, but return only its REAL OS
+      // evidence. The barrier models delayed startup, not permission success.
+      processIdentity.queryProcessIdentitySync = () => { throw Error('sync_probe_used'); };
+      processIdentity.queryProcessIdentity = async pid => {
+        emit({ stage: 'self-query-pending' });
+        const deadline = Date.now() + 20000;
+        while (!fs.existsSync(barrier) && Date.now() < deadline)
+          await new Promise(resolve => setTimeout(resolve, 10));
+        if (!fs.existsSync(barrier)) throw Error('fixture_timeout');
+        return query(pid);
+      };
+    }
     const store = createHtmlArtifactStore({ dataDir, checkpoint(stage) {
       if (action === 'crash' && stage === 'before-rename') process.exit(73);
       const held = action === 'recover-hold' ? 'recovery-proven' : action === 'hold-renamed' ? 'renamed' : 'before-rename';
@@ -107,7 +121,7 @@ async function check(name, action) { await action(); checks++; console.log('  ok
       const f = fixture({ queryProcess: () => ({ state: 'unknown' }) });
       await assert.rejects(f.store.publish(input), busy);
       assert.deepEqual(fs.readdirSync(f.root), []);
-      assert.throws(() => htmlArtifactLockOwner(() => ({ state: 'found', identity: '' })), busy);
+      await assert.rejects(htmlArtifactLockOwner(() => ({ state: 'found', identity: '' })), busy);
     });
     await check('legacy, empty, torn, future and unknown records stay byte-for-byte intact on recovery', async () => {
       for (const bytes of ['', 'abandoned', '{"version":2', JSON.stringify({ pid: 1 }),
@@ -131,11 +145,45 @@ async function check(name, action) { await action(); checks++; console.log('  ok
         }
       } finally { processIdentity.queryProcessIdentitySync = original; }
     });
+    await check('async unknown, gone, malformed and rejected self probes still fail closed', async () => {
+      for (const value of [{ state: 'unknown' }, { state: 'gone' }, { state: 'found', identity: '' }])
+        await assert.rejects(htmlArtifactLockOwner(async () => value), busy);
+      await assert.rejects(htmlArtifactLockOwner(async () => { throw Error('denied'); }), busy);
+    });
     if (supported) {
+      if (process.platform === 'win32') await check('cold self probe yields under the gate and uses real async OS evidence', async () => {
+        const f = fixture(), running = child(f, 'cold-self');
+        try {
+          assert.equal((await running.ready).stage, 'self-query-pending');
+          assert.deepEqual(fs.readdirSync(f.root), []);
+          await assert.rejects(acquireHtmlArtifactGate(f.root), busy);
+          await assert.rejects(f.store.publish(input), busy);
+        } finally { running.release(); }
+        const done = await running.done;
+        assert.equal(done.status, 0); assert.equal(done.messages.at(-1).ok, true);
+        assert.equal((await f.store.read(done.messages.at(-1).result.id)).html, input.html);
+      });
+      for (const replaced of ['root', 'data']) await check('identity await rejects physical directory replacement: ' + replaced, async () => {
+        let enter, resume;
+        const entered = new Promise(resolve => { enter = resolve; });
+        const paused = new Promise(resolve => { resume = resolve; });
+        const f = fixture({ queryProcess: async pid => { enter(); await paused; return queryHtmlArtifactProcess(pid); } });
+        const publishing = f.store.publish(input);
+        await entered;
+        try {
+          const target = replaced === 'root' ? f.root : f.dataDir;
+          fs.renameSync(target, target + '-original'); fs.mkdirSync(target, { mode: 0o700 });
+        } finally { resume(); }
+        await assert.rejects(publishing, error => error.code === 'html_artifact_storage_unsafe');
+        assert.deepEqual(fs.readdirSync(replaced === 'root' ? f.root : f.dataDir), []);
+        const original = replaced === 'root' ? f.root + '-original' : path.join(f.dataDir + '-original', 'html-artifacts');
+        assert.deepEqual(fs.readdirSync(original), []);
+        await (await acquireHtmlArtifactGate(original))();
+      });
       await check('real local OS reports a stable creation identity for THIS process', async () => {
         const first = queryHtmlArtifactProcess(process.pid), second = queryHtmlArtifactProcess(process.pid);
         assert.equal(first.state, 'found'); assert.deepEqual(second, first);
-        const record = htmlArtifactLockOwner();
+        const record = await htmlArtifactLockOwner();
         assert.equal(record.pid, process.pid); assert.equal(record.processIdentity, first.identity);
         assert.equal(htmlArtifactOwnerDead(record), false);
       });
@@ -316,7 +364,7 @@ async function check(name, action) { await action(); checks++; console.log('  ok
       for (const replacement of ['inode', 'owner-bytes', 'root']) await check('residual release proof rejects replacement: ' + replacement, async () => {
         const f = releaseFixture(); await f.store.publish(input); f.fault.remaining = 1;
         await assert.rejects(f.store.recoverLock(), releaseFailed);
-        const foreign = JSON.stringify(htmlArtifactLockOwner()) + '\n';
+        const foreign = JSON.stringify(await htmlArtifactLockOwner()) + '\n';
         if (replacement === 'root') {
           fs.renameSync(f.root, path.join(f.dataDir, 'original-root'));
           fs.mkdirSync(f.root, { mode: 0o700 });
@@ -407,7 +455,7 @@ async function check(name, action) { await action(); checks++; console.log('  ok
       });
       await check('a different owner in the acquisition inode cannot be laundered as a partial owner write', async () => {
         const io = Object.create(fs), f = fixture({ io }), writers = new Set();
-        const foreign = JSON.stringify(htmlArtifactLockOwner()) + '\n';
+        const foreign = JSON.stringify(await htmlArtifactLockOwner()) + '\n';
         io.openSync = (file, flags, ...args) => {
           const fd = fs.openSync(file, flags, ...args);
           if (file === f.lock && flags === 'wx') writers.add(fd);
@@ -442,7 +490,7 @@ async function check(name, action) { await action(); checks++; console.log('  ok
       });
       await check('a later foreign lock swapped after identity proof is preserved, not removed', async () => {
         const f = fixture(); assert.equal((await child(f, 'crash').done).status, 73);
-        const foreign = JSON.stringify(htmlArtifactLockOwner());
+        const foreign = JSON.stringify(await htmlArtifactLockOwner());
         const store = createHtmlArtifactStore({ dataDir: f.dataDir, checkpoint(stage) {
           if (stage === 'recovery-proven') { fs.unlinkSync(f.lock); fs.writeFileSync(f.lock, foreign); }
         } });
