@@ -115,7 +115,9 @@ function nativeRuntimeFixture(exposedRealm) {
     hasSwitch: () => false, argv: [], execArgv: [], env: {}, calls, windows };
 }
 
-test('falls back to a separate JavaScript-disabled window after native isolation fails', async () => {
+for (const uncertain of [false, true]) test(uncertain
+  ? 'unproven native isolation remains static, including later requests'
+  : 'falls back to a separate JavaScript-disabled window after native isolation fails', async () => {
   const html = '<p>Static preview fixture</p><script>document.body.dataset.ran = "yes"</script>';
   const fixture = nativeRuntimeFixture(0);
   const staticCalls = [];
@@ -124,6 +126,7 @@ test('falls back to a separate JavaScript-disabled window after native isolation
     constructor(options) {
       super(options);
       this.options = options;
+      if (uncertain) this.webContents.mainFrame.framesInSubtree = [];
       this.webContents.debugger = {
         attach() {}, detach() {}, isAttached: () => true,
         sendCommand: async (method, params) => {
@@ -145,6 +148,12 @@ test('falls back to a separate JavaScript-disabled window after native isolation
     assert.ok(result.diagnostics.warnings.includes('page_javascript_disabled'));
     assert.equal(fixture.calls.some(expression => expression.includes(html)), false);
     assert.ok(staticCalls.some(([method, params]) => method === 'Runtime.evaluate' && params.expression.includes('Static preview fixture')));
+    if (uncertain) {
+      const second = await client.preview(input(html));
+      assert.equal(fixture.windows.length, 3, 'later request does not re-run the failed interactive qualification');
+      assert.equal(fixture.windows[2].options.webPreferences.javascript, false);
+      assert.ok(second.diagnostics.warnings.includes('page_scripts_not_executed'));
+    }
   } finally { client.dispose(); service.dispose(); }
 });
 
@@ -174,6 +183,91 @@ test('static rendering mounts presentation from an inert template', () => {
 async function rejectCode(promise, code) {
   await assert.rejects(promise, error => error?.code === code);
 }
+
+test('page JavaScript errors expose generated descriptions and bounded page locations, never raw values', async () => {
+  const { scriptDiagnostic, validDiagnostics } = require('../lib/html-preview-diagnostics.cjs');
+  const cases = [
+    ['Uncaught ReferenceError: PRIVATE_KEY_CANARY is not defined', 'ReferenceError', 'undefined_identifier'],
+    ['Uncaught TypeError: Cannot read properties of null (reading PRIVATE_KEY_CANARY)', 'TypeError', 'null_property'],
+    ['Uncaught TypeError: Cannot read properties of undefined (reading PRIVATE_KEY_CANARY)', 'TypeError', 'undefined_property'],
+    ['Uncaught TypeError: PRIVATE_KEY_CANARY is not a function', 'TypeError', 'not_callable'],
+    ['Uncaught SyntaxError: PRIVATE_KEY_CANARY', 'SyntaxError', 'syntax'],
+    ['Uncaught RangeError: PRIVATE_KEY_CANARY', 'RangeError', 'range'],
+    ['Uncaught (in promise) Error: file:///C:/PRIVATE_KEY_CANARY', 'Error', 'script_exception'],
+  ];
+  for (const [text, name, reason] of cases) {
+    const error = scriptDiagnostic(text, 42, 'about:srcdoc');
+    assert.equal(error.name, name);
+    assert.equal(error.reason, reason);
+    assert.deepEqual(error.location, { source: 'rendered_document', line: 42 });
+    assert.equal(JSON.stringify(error).includes('PRIVATE_KEY_CANARY'), false);
+    assert.ok(error.description.length <= 200);
+    const { client, service } = await wire(async task => {
+      const result = resultFor(task.request); result.diagnostics.errors.push(error); return result;
+    });
+    try { assert.deepEqual((await client.preview(input())).diagnostics.errors, [error]); }
+    finally { client.dispose(); service.dispose(); }
+    assert.equal(validDiagnostics({ ...resultFor(input()).diagnostics, errors: [{ ...error, description: text }] }), false);
+    assert.equal(validDiagnostics({ ...resultFor(input()).diagnostics, errors: [{ ...error, stack: text }] }), false);
+  }
+  assert.equal(scriptDiagnostic('Uncaught TypeError: host secret', 1, 'file:///host/private.js'), null);
+  assert.equal(scriptDiagnostic('private console arguments', 1, 'about:srcdoc'), null);
+  assert.equal(scriptDiagnostic('Uncaught Error: secret', 1_000_001, 'about:srcdoc').location, undefined);
+});
+
+test('unknown uncaught page exceptions retain generic diagnostics without copying thrown values', async () => {
+  const { scriptDiagnostic, validDiagnostics } = require('../lib/html-preview-diagnostics.cjs');
+  const cases = [
+    'Uncaught InvalidCharacterError: PRIVATE_KEY_CANARY',
+    'Uncaught CustomError: PRIVATE_KEY_CANARY',
+    'Uncaught PRIVATE_KEY_CANARY',
+    'Uncaught (in promise) #<Object> PRIVATE_KEY_CANARY',
+  ];
+  for (const text of cases) {
+    const error = scriptDiagnostic(text, 42, 'about:srcdoc');
+    assert.deepEqual(error, { code: 'script_error' });
+    assert.equal(scriptDiagnostic(text, 42, 'file:///host/PRIVATE_KEY_CANARY.js'), null);
+    assert.equal(validDiagnostics({ ...resultFor(input()).diagnostics, errors: [error] }), true);
+    const { client, service } = await wire(async task => {
+      const result = resultFor(task.request); result.diagnostics.errors.push(error); return result;
+    });
+    try { assert.deepEqual((await client.preview(input())).diagnostics.errors, [{ code: 'script_error' }]); }
+    finally { client.dispose(); service.dispose(); }
+  }
+});
+
+test('static resource and layout diagnostics stay closed and bounded across private IPC', async () => {
+  const { client, service } = await wire(async task => {
+    const result = resultFor(task.request);
+    result.diagnostics.errors = [{ code: 'image_decode_failed', type: 'image' }, { code: 'font_load_failed', type: 'font' }];
+    result.diagnostics.warnings = ['page_javascript_disabled', 'native_network_isolation_unavailable', 'page_scripts_not_executed',
+      'dynamic_content_not_measured', 'fonts_unavailable', 'content_width_overflows_viewport', 'layout_settle_timeout'];
+    return result;
+  });
+  try { assert.equal((await client.preview(input())).diagnostics.errors.length, 2); }
+  finally { client.dispose(); service.dispose(); }
+});
+
+test('live evidence recognizes only PNG image blocks and never manufactures vision success', () => {
+  const proof = require('./fixtures/html-preview-live-proof.cjs');
+  const challenge = proof.createChallenge();
+  assert.match(challenge.code, /^\d{4}$/);
+  assert.equal(Buffer.from(challenge.data, 'base64').includes(Buffer.from(challenge.code)), false);
+  const blocks = [
+    { type: 'image', source: { type: 'base64', media_type: 'image/png', data: challenge.data } },
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,' + challenge.data } },
+    { type: 'input_image', image_url: 'data:image/png;base64,' + challenge.data },
+    { type: 'image', mimeType: 'image/png', data: challenge.data },
+  ];
+  for (const block of blocks) {
+    const images = proof.providerImages({ nested: { content: [block] } });
+    assert.equal(images.length, 1); assert.equal(images[0].sha256, challenge.sha256);
+    assert.equal(images[0].width, 180); assert.equal(images[0].height, 70);
+  }
+  assert.equal(proof.providerImages({ content: blocks }).length, 1, 'repeated payload image is not counted twice');
+  assert.deepEqual(proof.providerImages({ type: 'text', text: challenge.data, token: 'PRIVATE_CANARY' }), []);
+  assert.deepEqual(proof.providerImages({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'aW52YWxpZA==' } }), []);
+});
 
 test('bounds requests and returns a strictly validated in-memory PNG result', async () => {
   const { client, service } = await wire(async task => resultFor(task.request));

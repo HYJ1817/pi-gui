@@ -66,6 +66,10 @@ async function run(c) {
           const proof = { mode: result.details.mode, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'),
             width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
           fs.appendFileSync(path.join(process.env.VISUAL_REPLIES_WORLD, 'evidence', `context-${native}.jsonl`), JSON.stringify(proof) + '\n');
+          if (process.env.HTML_PREVIEW_OBSERVER === '1') {
+            const evidence = path.join(process.env.VISUAL_REPLIES_WORLD, 'evidence', 'offline-preview-' + proof.sha256 + '.png');
+            if (!fs.existsSync(evidence)) fs.writeFileSync(evidence, bytes, { flag: 'wx' });
+          }
         }
       }
     }

@@ -70,7 +70,7 @@ async function start() {
   const world = h.validateWorld(process.env.VISUAL_REPLIES_WORLD, process.env.VISUAL_REPLIES_TEMP_ROOT);
   const target = process.env.VISUAL_REPLIES_TARGET, mode = process.env.VISUAL_REPLIES_MODE;
   const phase = process.env.VISUAL_REPLIES_PHASE, packaged = target === 'packaged';
-  if (!['source', 'packaged'].includes(target) || !['offline', 'live'].includes(mode) || !['generate', 'restore'].includes(phase)) throw Error('invalid_fixture_mode');
+  if (!['source', 'packaged'].includes(target) || !['offline', 'live', 'live-text'].includes(mode) || !['generate', 'restore'].includes(phase)) throw Error('invalid_fixture_mode');
   for (const [name, directory] of Object.entries({ home: 'home', appData: 'appdata', userData: 'profile/' + target, sessionData: 'profile/' + target,
     temp: 'tmp', logs: 'logs', crashDumps: 'logs' })) app.setPath(name, path.join(world, directory));
   const main = path.resolve(process.env.VISUAL_REPLIES_MAIN || ''), reportFile = path.join(world, 'evidence', target + '-' + phase + '.json');
@@ -91,7 +91,11 @@ async function start() {
     throw Error(name === 'prompt-settled' ? 'prompt_timeout' : 'condition_timeout');
   };
   const pointer = async point => {
+    // Native hover must reach the host even after an opaque iframe owned input.
+    // CDP mouseMoved alone can leave the host's hover-only controls inert.
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(point.x), y: Math.round(point.y) });
     await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point });
+    await read(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)))));
     for (const type of ['mousePressed', 'mouseReleased']) await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent',
       { type, ...point, button: 'left', clickCount: 1 });
   };
@@ -169,14 +173,9 @@ async function start() {
       await until(async () => { const g = await read(renderer.geometry); return g.theme === theme && Math.abs(g.width - width) <= 1; }, 'theme-size');
       await read(renderer.frameRect, title); await h.sleep(120); await shot(theme + '-' + name);
     }
-    // Keep the unavailable-preview run focused on publication and recovery.
-    // The full viewer matrix remains required on a working preview runtime.
-    if (report.previewReportedError || report.staticPreview) {
-      report.viewerControls = report.staticPreview ? 'unverified-static-preview' : 'unverified-preview-unavailable';
-      return;
-    }
+    // Published-viewer controls must also work when private preview is static.
     const activate = async selector => {
-      const focused = await read((title, selector) => {
+      const point = await read((title, selector) => {
         let node;
         if (selector === '.html-artifact-expand') {
           const frame = [...document.querySelectorAll('iframe.html-artifact-frame')].find(item => item.title === title);
@@ -185,14 +184,13 @@ async function start() {
           const surface = [...document.querySelectorAll('.html-artifact-surface')].find(item => item.open && item.getAttribute('aria-label') === title);
           node = surface?.querySelector(selector);
         }
-        if (!node || node.disabled) return false;
-        node.focus();
-        return document.activeElement === node;
+        if (!node || node.disabled) return null;
+        node.scrollIntoView({ block: 'center', behavior: 'instant' });
+        const rect = node.getBoundingClientRect();
+        return rect.width && rect.height ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null;
       }, title, selector);
-      if (!focused) throw Error('viewer_control_unavailable');
-      for (const type of ['keyDown', 'keyUp']) await win.webContents.debugger.sendCommand('Input.dispatchKeyEvent', {
-        type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13,
-      });
+      if (!point) throw Error('viewer_control_unavailable');
+      await pointer(point);
     };
     win.setContentSize(1320, 820); await read(renderer.theme, 'dark'); await read(renderer.frameRect, title);
     await activate('.html-artifact-expand');
@@ -225,7 +223,9 @@ async function start() {
     require(main); await app.whenReady();
     await until(() => { win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('http://127.0.0.1:' + process.env.PORT + '/')); return Boolean(win); }, 'window', 60000);
     if (win.webContents.isLoading()) await new Promise(resolve => win.webContents.once('did-finish-load', resolve));
+    win.show(); win.focus();
     win.webContents.debugger.attach('1.3');
+    await win.webContents.debugger.sendCommand('Page.bringToFront');
     const prefs = win.webContents.getLastWebPreferences();
     check('production-entry-target', packaged ? app.isPackaged === true && h.inside(process.env.VISUAL_REPLIES_PACKAGED_COPY, main)
       && h.digest(main) === process.env.VISUAL_REPLIES_EXPECTED_MAIN_SHA256
@@ -245,7 +245,7 @@ async function start() {
       await until(async () => { const s = await read(renderer.state); return s.connected && s.owner?.sessionId
         && s.owner.sessionId !== previousSession && !s.streaming && !s.artifacts.length; }, 'fresh-target-session');
       report.sessionId = (await read(renderer.state)).owner.sessionId; save();
-      if (mode === 'live') check('explicit-model-selected', await read(renderer.selectedModel, process.env.PI_PROVIDER, process.env.PI_MODEL));
+      if (mode.startsWith('live')) check('explicit-model-selected', await read(renderer.selectedModel, process.env.PI_PROVIDER, process.env.PI_MODEL));
       if (mode === 'offline') {
         const result = await prompt('offline-filter-panel', 'sample:filter-panel', 30000);
         report.previewReportedError = result.toolErrors.some(error => error.tool === 'html_preview');
@@ -255,17 +255,24 @@ async function start() {
           && (result.previewSuccesses === 1 || report.previewReportedError));
         check('offline-followup-text-after-render', result.textDeltasAfterRender > 0);
       } else {
-        const natural = 'Median timings across five runs were Parser 42 to 30 ms, Renderer 180 to 122 ms, and Storage 89 to 84 ms. Compare the changes, identify the largest improvement and note one caveat. Keep the answer concise.';
-        const plain = await prompt('natural-comparison', natural, 240000);
-        check('natural-comparison-completed', plain.started && plain.settled && !plain.error);
-        const explicit = 'Create a compact interactive comparison dashboard for Parser, Renderer, and Storage with before/after durations, one caveat, and a filter. Use body data-sample="p3-live-final", button id="sample-action", output id="sample-state", and ul id="items" with Code, Tests, Docs li rows; mark the Tests row data-test. After setup set document.documentElement.dataset.sampleReady="true". The button must filter to Tests only, leave exactly one visible task, set output text to "1 matching task", and set document.documentElement.dataset.interacted="1". First make a draft whose canvas draws a four-digit value at runtime with crypto.getRandomValues, without putting those digits in DOM text. Call html_preview to inspect its screenshot and briefly report the visible value. Freeze that exact value in the final page as the canvas data-vision-code attribute, draw it on the final canvas, and publish with html_render. Use no other tools, files, external resources, or network. If preview reports html_resource_blocked, do not retry a URL or weaken policy; briefly report the block and continue with self-contained content, calling html_preview at most once more before html_render. After the final render, stream a short text summary and stop; do not loop for perfection.';
+        if (mode === 'live') {
+          const natural = 'Analyze our six-service latency experiment. Baseline/candidate p50 and p95 in milliseconds: Parser 42/30 and 90/70; Renderer 180/122 and 430/250; Storage 89/84 and 210/230; Search 65/51 and 190/155; Network 110/105 and 360/390; Queue 38/25 and 150/90. Each number is the median across five runs with equal traffic. Explain which rollout is most promising, compare relative and absolute gains, and highlight tail regressions and one evidence caveat. Make this easy to compare at a glance.';
+          const plain = await prompt('natural-comparison', natural, 240000);
+          report.autonomousVisualization = { completed: plain.started && plain.settled && !plain.error,
+            htmlRenderCalls: plain.tools.html_render || 0, successfulPublishes: plain.renderSuccesses,
+            usedWithoutVisualInstruction: plain.renderSuccesses > 0 };
+          check('natural-comparison-completed', report.autonomousVisualization.completed);
+        }
+        const common = 'Create a compact self-contained interactive comparison dashboard for Parser 42 to 30 ms, Renderer 180 to 122 ms, and Storage 89 to 84 ms, with a static table/SVG fallback, a JavaScript-initialized SVG or DOM chart, and a Canvas drawing. Use body data-sample="p3-live-final", button id="sample-action", output id="sample-state", and ul id="items" with Code, Tests, Docs li rows; mark the Tests row data-test. After setup set document.documentElement.dataset.sampleReady="true". Clicking the button must filter to Tests only, leave exactly one visible task, set output text to "1 matching task", and set document.documentElement.dataset.interacted="1". First draft: put content inside a main element with min-width:1100px and call html_preview at width 760. Then use the actual layout diagnostics to remove that overflow and preview the corrected document once before publishing that exact corrected HTML with html_render. Maximum two html_preview calls and one html_render; use no other tools, files, remote resources or network. Never weaken isolation; if static preview is reported, acknowledge that scripts were not evaluated, keep the authored fallback, and do not try to enable JavaScript. After publishing, send a short text summary and stop.';
+        const challenge = JSON.parse(fs.readFileSync(path.join(world, 'evidence', 'vision-challenge.json'), 'utf8'));
+        const vision = ' Embed this provided PNG in the first draft as a visible img with alt="verification pattern", never decode it with code or tools. Only after seeing the html_preview screenshot, report its four visible digits in normal assistant text, and put those digits in the final page data-vision-code attribute. If no screenshot is available, say you could not read it; do not invent digits. PNG data URI: data:image/png;base64,' + challenge.data;
+        const explicit = common + (mode === 'live' ? vision : ' You are testing text-only model feedback. Rely on the text diagnostics, not a screenshot; briefly state the measured overflow and the static limitations before publishing.');
         const result = await prompt('explicit-preview-and-render', explicit, 240000);
         const renderIndex = result.toolOrder.indexOf('html_render');
-        const blockedPreview = result.toolErrors.some(error => error.tool === 'html_preview' && error.code === 'html_resource_blocked');
         check('explicit-preview-before-render', result.started && result.settled && !result.error && result.otherToolStarts === 0
           && result.tools.html_preview >= 1 && result.tools.html_preview <= 2 && result.tools.html_render === 1
           && renderIndex === result.toolOrder.length - 1 && result.toolOrder.slice(0, renderIndex).every(name => name === 'html_preview')
-          && (result.tools.html_preview === 1 || blockedPreview) && result.previewSuccesses > 0 && result.renderSuccesses === 1);
+          && result.previewSuccesses > 0 && result.renderSuccesses === 1);
         check('explicit-text-after-final-render', result.textDeltasAfterRender > 0);
       }
       let state;
@@ -279,9 +286,28 @@ async function start() {
       await interact(title, 'final', mode === 'offline' ? 'filter-panel' : 'p3-live-final');
       if (mode === 'offline') check('offline-after-render-ui-text', state.offlineFollowup);
       report.staticPreview = require('../html-preview-live.cjs').nativeSummary(h, world, state.owner.sessionId).previewModes.static > 0;
-      await matrix(title);
-      fs.writeFileSync(checkpoint, JSON.stringify({ sessionId: state.owner.sessionId, artifactIds: state.artifacts.map(a => a.id),
+      const original = state.owner.sessionId, artifactIds = state.artifacts.map(a => a.id);
+      await click('#btnTopbarNew');
+      await until(async () => { const next = await read(renderer.state); return next.owner?.sessionId !== original && next.connected && !next.streaming && !next.artifacts.length; }, 'new-session-clears-artifacts');
+      check('session-switch-clears-artifacts', true);
+      if (mode === 'offline') {
+        await prompt('offline-second-session', 'sample:filter-panel', 30000);
+        await until(async () => { await read(renderer.visitPendingArtifact); const next = await read(renderer.state);
+          return next.artifacts.length === 1 && next.artifacts[0].state === 'ready'; }, 'second-session-artifact');
+        const second = await read(renderer.state);
+        check('multiple-session-references-isolated', second.owner.sessionId !== original && !artifactIds.includes(second.artifacts[0].id));
+      }
+      await read(renderer.refreshSessions);
+      await click('.pj-sess[data-session-id="' + original + '"] .pj-sess-primary');
+      await until(async () => { await read(renderer.visitPendingArtifact); const restored = await read(renderer.state);
+        return restored.owner?.sessionId === original && JSON.stringify(restored.artifacts.map(item => item.id)) === JSON.stringify(artifactIds)
+          && restored.artifacts.every(item => item.state === 'ready'); }, 'session-return');
+      check('session-return-reference-identities', true);
+      report.sessionId = original; save();
+      await shot('session-return');
+      fs.writeFileSync(checkpoint, JSON.stringify({ sessionId: original, artifactIds,
         sampleId: mode === 'offline' ? 'filter-panel' : 'p3-live-final' }), { flag: 'wx' });
+      await matrix(title);
     } else {
       await read(renderer.beginObservation);
       await read(renderer.refreshSessions);

@@ -58,6 +58,7 @@ test('native preview prepares resources, returns model feedback and cancels with
   assert.equal(result.details.ok, true);
   assert.equal(result.content[0].type, 'text');
   assert.match(result.content[0].text, /Static preview \(page JavaScript disabled\)/);
+  assert.match(result.content[0].text, /runtime errors were NOT evaluated/);
   const message = { role: 'toolResult', toolName: 'html_preview', toolCallId: 'preview-call', content: result.content };
   const modelContext = await hooks.get('context')({ messages: [message] }, ctx);
   assert.deepEqual(modelContext.messages[0].content[1], { type: 'image', mimeType: 'image/png', data: 'aW1hZ2U=' });

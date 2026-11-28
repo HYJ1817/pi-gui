@@ -2,7 +2,7 @@
 // Opt-in acceptance only. No imports/setup until a requested live run is authorized.
 function modeFor(args) {
   if (!args.length || args.length === 1 && args[0] === '--check-driver') return 'check-driver';
-  if (args.length === 1 && ['--offline', '--live'].includes(args[0])) return args[0].slice(2);
+  if (args.length === 1 && ['--offline', '--live', '--live-text'].includes(args[0])) return args[0].slice(2);
   throw Error('invalid_mode');
 }
 function packagedRoot(env) {
@@ -19,12 +19,19 @@ async function checkDriver() {
     PI_GUI_VISUAL_REPLIES_ENDPOINT: 'http://127.0.0.1:1/v1', PI_GUI_VISUAL_REPLIES_PI_BIN: path.join(require('node:os').tmpdir(), 'fixture-pi.cmd'),
     PI_GUI_VISUAL_REPLIES_AUTHORIZE_CREDENTIAL: 'PI_GUI_VISUAL_REPLIES_KEY', PI_GUI_VISUAL_REPLIES_KEY: 'synthetic-driver-only' };
   check(() => assert.equal(require('./fixtures/html-preview-live-electron.cjs').validate(), 12));
-  for (const [args, mode] of [[[], 'check-driver'], [['--check-driver'], 'check-driver'], [['--offline'], 'offline'], [['--live'], 'live']])
+  for (const [args, mode] of [[[], 'check-driver'], [['--check-driver'], 'check-driver'], [['--offline'], 'offline'], [['--live'], 'live'], [['--live-text'], 'live-text']])
     check(() => assert.equal(modeFor(args), mode));
   for (const args of [['--unknown'], ['--offline', '--live']]) check(() => assert.throws(() => modeFor(args), { message: 'invalid_mode' }));
   for (const suffix of ['LIVE', 'AUTHORIZE_MODEL_CALLS', 'PROVIDER', 'MODEL', 'API', 'ENDPOINT', 'PI_BIN', 'AUTHORIZE_CREDENTIAL', 'KEY'])
     check(() => { const env = { ...valid }; delete env['PI_GUI_VISUAL_REPLIES_' + suffix]; assert.throws(() => live.authorizeLive(env)); });
   check(() => assert.equal(live.authorizeLive(valid).model, 'no-model'));
+  check(() => assert.equal(live.authorizeLive({ ...valid, PI_GUI_VISUAL_REPLIES_MODEL: 'fixture/model[1m]' }).model, 'fixture/model[1m]'));
+  check(() => assert.throws(() => live.authorizeLive({ ...valid, PI_GUI_VISUAL_REPLIES_MODEL: 'fixture/model[1m];command' })));
+  const proof = require('./fixtures/html-preview-live-proof.cjs'), challenge = proof.createChallenge();
+  check(() => assert.match(challenge.code, /^\d{4}$/));
+  check(() => assert.equal(proof.providerImages({ messages: [{ content: [{ type: 'image', source: {
+    type: 'base64', media_type: 'image/png', data: challenge.data } }] }] })[0].sha256, challenge.sha256));
+  check(() => assert.equal(proof.providerImages({ type: 'image', source: { type: 'base64', media_type: 'text/plain', data: challenge.data } }).length, 0));
   check(() => assert.throws(() => packagedRoot({ PI_GUI_VISUAL_REPLIES_PACKAGED_ROOT: 'relative' }), { message: 'packaged_root_must_be_absolute' }));
   let setupImports = 0;
   await assert.rejects(require('node:vm').runInNewContext('(' + run.toString() + ')(["--live"], {})', {
@@ -49,6 +56,9 @@ function nativeSummary(h, world, sessionId) {
   const safeName = name => ['html_preview', 'html_render'].includes(name) ? name : 'other';
   const count = (map, name) => { map[name] = (map[name] || 0) + 1; };
   const reported = new Set(); let previewSeen = false, randomCanvasDeclared = false, reportedCodeFrozen = false, formalPublishes = 0;
+  const challengeFile = path.join(world, 'evidence', 'vision-challenge.json');
+  const challenge = fs.existsSync(challengeFile) ? JSON.parse(fs.readFileSync(challengeFile, 'utf8')) : null;
+  const previews = []; let finalHtmlHash = null, challengeEmbedded = false, correctCodeFrozen = false;
   for (const row of rows) {
     const message = row.message; if (!Array.isArray(message?.content)) continue;
     if (message.role === 'assistant') for (const part of message.content) {
@@ -56,10 +66,16 @@ function nativeSummary(h, world, sessionId) {
       if (part.type !== 'toolCall') continue;
       const name = safeName(part.name); count(toolCalls, name); toolOrder.push(name); calls.set(part.id, { name, messageId: row.id });
       const html = part.arguments?.html;
-      if (name === 'html_preview' && typeof html === 'string' && /<canvas\b/i.test(html) && /crypto\.getRandomValues/.test(html)) randomCanvasDeclared = true;
+      if (name === 'html_preview' && typeof html === 'string') {
+        if (/<canvas\b/i.test(html) && /crypto\.getRandomValues/.test(html)) randomCanvasDeclared = true;
+        challengeEmbedded ||= Boolean(challenge && html.includes(challenge.data));
+        previews.push({ id: part.id, htmlSha256: h.hashText(html) });
+      }
       if (name === 'html_render' && previewSeen && typeof html === 'string') {
         const frozen = html.match(/\bdata-vision-code=["'](\d{4})["']/i)?.[1];
         reportedCodeFrozen ||= Boolean(frozen && reported.has(frozen));
+        correctCodeFrozen ||= Boolean(challenge && frozen === challenge.code);
+        finalHtmlHash = h.hashText(html);
       }
     }
     if (message.role !== 'toolResult') continue;
@@ -83,15 +99,39 @@ function nativeSummary(h, world, sessionId) {
     persistedPreviewImages += message.content.filter(part => part?.type === 'image').length;
     if (message.isError !== true && message.details?.ok === true) {
       previewSeen = true;
+      const preview = previews.find(item => item.id === message.toolCallId);
+      if (preview) Object.assign(preview, { mode: message.details.mode, width: message.details.width, contentWidth: message.details.contentWidth,
+        overflow: message.details.contentWidth > message.details.width,
+        diagnosticsReturned: message.content.some(part => part.type === 'text' && part.text.includes('"warnings":')) });
       if (message.details.mode === 'static' || message.details.mode === 'interactive') previewModes[message.details.mode]++;
     }
   }
   const contextProof = path.join(world, 'evidence', `context-${sessionId}.jsonl`);
   const contextImages = fs.existsSync(contextProof) ? fs.readFileSync(contextProof, 'utf8').trim().split('\n').map(JSON.parse) : [];
+  const providerFile = path.join(world, 'evidence', `provider-${sessionId}.jsonl`);
+  const providerRequests = fs.existsSync(providerFile) ? fs.readFileSync(providerFile, 'utf8').trim().split('\n').map(JSON.parse) : [];
+  const providerImageInput = providerRequests.some(row => row.event === 'request' && row.images.length > 0);
+  const observedContextImages = providerRequests.filter(row => row.event === 'context').flatMap(row => row.images || []);
+  const acceptedImageDigests = new Set(); let pendingImageDigests = [];
+  for (const event of providerRequests) {
+    if (event.event === 'request') pendingImageDigests = (event.images || []).map(image => image.sha256);
+    if (event.event === 'response' && event.status >= 200 && event.status < 300)
+      for (const digest of pendingImageDigests) acceptedImageDigests.add(digest);
+  }
+  const modelReceivedPreviewImage = observedContextImages.some(image => acceptedImageDigests.has(image.sha256));
+  const modelReceivedInteractivePreviewImage = observedContextImages.some(image => image.mode === 'interactive' && acceptedImageDigests.has(image.sha256));
+  const diagnosticContexts = providerRequests.filter(row => row.event === 'context');
+  const corrected = previews.find((item, index) => index > 0 && previews[index - 1].overflow === true && item.overflow === false
+    && item.htmlSha256 !== previews[index - 1].htmlSha256 && item.htmlSha256 === finalHtmlHash);
   return { entries: rows.length, sessionSha256: h.hashText(raw), toolCalls, toolResults, toolOrder, toolErrors, persistedPreviewImages, previewModes, contextImages,
+    providerRequests, providerImageInput, observedContextImages, modelReceivedPreviewImage, modelReceivedInteractivePreviewImage,
+    diagnosticContexts,
     contextLinksValidated: calls.size > 0 && toolResultCount === calls.size && linked.size === calls.size
       && [...calls.keys()].every(id => linked.has(id)), formalPublishes,
-    visionChallenge: { randomCanvasDeclared, reportedCodeFrozen, pixelsIndependentlyVerified: false } };
+    layoutCorrection: { previews: previews.map(({ id, ...metadata }) => metadata), verified: Boolean(corrected) },
+    visionChallenge: { randomCanvasDeclared, reportedCodeFrozen, challengeEmbedded, correctCodeFrozen,
+      reportedCorrectCode: Boolean(challenge && reported.has(challenge.code)),
+      pixelsIndependentlyVerified: Boolean(challengeEmbedded && modelReceivedPreviewImage && correctCodeFrozen && reported.has(challenge?.code)) } };
 }
 function copyPackaged(h, world, root) {
   const fs = require('node:fs'), path = require('node:path'), source = fs.realpathSync(root), target = path.join(world, 'packaged-app');
@@ -125,7 +165,7 @@ async function launchPhase(h, helper, world, target, piEnv, mode, phase) {
   child.stdout.on('data', data => { result.stdoutBytes += data.length; }); child.stderr.on('data', data => { result.stderrBytes += data.length; });
   try {
     for (let i = 0; i < 5 && !exit && !original; i++) { original = h.processTable(world).find(p => p.pid === child.pid && p.marker); if (!original) await h.sleep(150); }
-    const end = Date.now() + (mode === 'live' && phase === 'generate' ? 600000 : 240000);
+    const end = Date.now() + (mode.startsWith('live') && phase === 'generate' ? 600000 : 240000);
     while (!exit && Date.now() < end) {
       if (!fs.existsSync(marker('processes')) && fs.existsSync(marker('ready'))) {
         observed = original ? h.processFamily(h.processTable(world), original) : [];
@@ -152,7 +192,7 @@ async function launchPhase(h, helper, world, target, piEnv, mode, phase) {
 }
 async function run(args = process.argv.slice(2), ambient = process.env) {
   const mode = modeFor(args);
-  if (mode === 'live') {
+  if (mode.startsWith('live')) {
     const selected = require('./fixtures/visual-replies-live.cjs').authorizeLive(ambient);
     if (!require('node:path').isAbsolute(selected.piBin)) throw Error('explicit_absolute_pi_bin_required');
   }
@@ -163,7 +203,7 @@ async function run(args = process.argv.slice(2), ambient = process.env) {
     qualification: 'benign-functional-only-not-overall-visual-or-security-acceptance',
     unverified: ['security-qualification', 'external-resource-success', 'independent-pixel-code-verification', ...(!root ? ['packaged-app'] : [])],
     privacy: { realUserSettingsRead: false, realUserSessionsRead: false, credentialDiskCopy: false,
-      explicitlySelectedCredentialInjected: mode === 'live', rawPayloadInReport: false, writableRoot: 'new-os.tmpdir-fixture' } };
+      explicitlySelectedCredentialInjected: mode.startsWith('live'), rawPayloadInReport: false, writableRoot: 'new-os.tmpdir-fixture' } };
   const resultFile = path.join(world, 'evidence/acceptance.json'), save = () => h.saveJson(resultFile, report);
   console.log('HTML preview acceptance fixture: ' + world);
   try {
@@ -171,11 +211,15 @@ async function run(args = process.argv.slice(2), ambient = process.env) {
     h.prepareProjects(world); const normalPi = helper.prepareNormalPi(world);
     const samples = JSON.parse(fs.readFileSync(normalPi.VISUAL_REPLIES_SAMPLES, 'utf8')); samples.find(row => row.id === 'filter-panel').preview = true;
     fs.writeFileSync(normalPi.VISUAL_REPLIES_SAMPLES, JSON.stringify(samples));
-    const selected = mode === 'live' ? await require('./fixtures/visual-replies-live.cjs').prepareLiveModel(world, ambient) : null;
+    const selected = mode.startsWith('live') ? await require('./fixtures/visual-replies-live.cjs').prepareLiveModel(world, ambient) : null;
     if (selected) {
       const file = path.join(world, 'agent/models.json'), config = JSON.parse(fs.readFileSync(file, 'utf8')), model = config.providers[selected.identity.provider].models[0];
-      model.input = ['text', 'image']; model.maxTokens = 8192; fs.writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
-      Object.assign(selected.identity, { promptBudget: 2, fixtureOverride: { input: model.input, maxTokens: model.maxTokens, source: 'created-temp-models-json-only' } });
+      model.input = mode === 'live-text' ? ['text'] : ['text', 'image']; model.maxTokens = 8192;
+      fs.writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
+      Object.assign(selected.identity, { promptBudget: mode === 'live-text' ? 1 : 2,
+        declaredInput: model.input, inputCapability: 'explicit-test-declaration-not-proof-of-provider-support',
+        fixtureOverride: { maxTokens: model.maxTokens, source: 'created-temp-models-json-only' } });
+      require('./fixtures/html-preview-live-proof.cjs').prepareProof(world);
     }
     const runtime = helper.copyElectron(world, require('electron')), packaged = root ? copyPackaged(h, world, root) : null;
     report.identity = { head: h.git(h.ROOT, 'rev-parse', 'HEAD'), dirty: Boolean(h.git(h.ROOT, 'status', '--porcelain')), node: process.version,
@@ -185,19 +229,23 @@ async function run(args = process.argv.slice(2), ambient = process.env) {
       const targetMode = target.name === 'source' ? mode : 'offline', row = { target: target.name, mode: targetMode, phases: [] }; report.targets.push(row); save();
       let before;
       for (const phase of ['generate', 'restore']) {
-        const result = await launchPhase(h, helper, world, target, targetMode === 'live' ? selected.env : normalPi, targetMode, phase);
+        const result = await launchPhase(h, helper, world, target, targetMode.startsWith('live') ? selected.env : normalPi, targetMode, phase);
         row.phases.push(result); report.passed += result.checks?.filter(x => x.pass).length || 0;
         report.failed += result.checks?.filter(x => !x.pass).length || (result.completed ? 0 : 1); save();
         if (!result.completed) {
           let sessionId = result.sessionId;
           const checkpointFile = path.join(world, 'evidence/checkpoint-' + target.name + '.json');
-          try { sessionId ||= JSON.parse(fs.readFileSync(checkpointFile, 'utf8')).sessionId; } catch {}
+          try { sessionId = JSON.parse(fs.readFileSync(checkpointFile, 'utf8')).sessionId || sessionId; } catch {}
           if (sessionId) {
             try { row.failedNative = nativeSummary(h, world, sessionId); }
             catch { row.failedNativeSummary = 'unavailable'; }
             save();
           }
-          throw Error('acceptance_phase_failed');
+          // Retain the failed phase, but do not let an isolated viewer failure
+          // erase independent restart/packaged evidence. Never retry a model.
+          if (!fs.existsSync(checkpointFile)) break;
+          before = row.failedNative?.sessionSha256;
+          continue;
         }
         const saved = JSON.parse(fs.readFileSync(path.join(world, 'evidence/checkpoint-' + target.name + '.json'), 'utf8'));
         row.native = nativeSummary(h, world, saved.sessionId); save();
@@ -205,25 +253,34 @@ async function run(args = process.argv.slice(2), ambient = process.env) {
           || row.native.formalPublishes !== saved.artifactIds.length) throw Error('native_evidence_missing');
         if (targetMode === 'offline' && (row.native.toolOrder.join(',') !== 'html_preview,html_render' || row.native.formalPublishes !== 1)) throw Error('offline_native_order_mismatch');
         if (before) { row.restartNoReplay = before === row.native.sessionSha256; if (!row.restartNoReplay) throw Error('restart_native_session_changed'); }
-        if (phase === 'generate') {
-          row.previewQualified = targetMode === 'offline' ? row.native.contextImages.some(image => image.mode === 'interactive') && row.native.previewModes.interactive > 0
-            : row.native.previewModes.interactive > 0 && row.native.visionChallenge.randomCanvasDeclared && row.native.visionChallenge.reportedCodeFrozen;
-          row.staticPreviewObserved = row.native.previewModes.static > 0;
-          row.staticPreviewQualified = targetMode === 'offline' && row.staticPreviewObserved && row.native.contextImages.some(image => image.mode === 'static');
+        if (phase === 'generate' || !Object.hasOwn(row, 'staticScreenshot')) {
+          row.interactiveScreenshot = row.native.previewModes.interactive > 0;
+          row.staticScreenshot = row.native.previewModes.static > 0;
+          row.previewQualified = row.interactiveScreenshot && (targetMode === 'offline'
+            ? row.native.contextImages.some(image => image.mode === 'interactive') : row.native.modelReceivedInteractivePreviewImage);
+          row.staticPreviewObserved = row.staticScreenshot;
+          row.staticPreviewQualified = row.staticScreenshot && (targetMode === 'offline'
+            ? row.native.contextImages.some(image => image.mode === 'static')
+            : targetMode === 'live-text' || row.native.modelReceivedPreviewImage);
+          row.modelUnderstoodScreenshot = targetMode === 'live' && row.native.visionChallenge.pixelsIndependentlyVerified;
+          row.textOnlyDiagnostics = targetMode === 'live-text' && !row.native.providerImageInput
+            && row.native.layoutCorrection.previews.some(item => item.diagnosticsReturned);
           row.previewUnavailable = row.native.toolErrors.some(error => error.tool === 'html_preview' && error.code === 'html_preview_unavailable');
-          if (!row.previewQualified && !row.staticPreviewQualified && !row.previewUnavailable
-            && !(targetMode === 'live' && row.staticPreviewObserved)) throw Error('native_evidence_missing');
+          if (!row.previewQualified && !row.staticPreviewQualified && !row.previewUnavailable) throw Error('native_evidence_missing');
         }
         before = row.native.sessionSha256; save();
       }
     }
-    report.completed = report.targets.every(target => target.previewQualified);
+    report.functionalCompleted = report.targets.every(target => target.phases.length === 2 && target.phases.every(phase => phase.completed));
+    report.screenshotUnderstandingVerified = report.targets.some(target => target.modelUnderstoodScreenshot);
+    report.interactivePreviewQualified = report.targets.every(target => target.previewQualified);
+    report.completed = report.functionalCompleted && report.interactivePreviewQualified;
     if (!report.completed) throw Error('interactive_preview_qualification_missing');
   } catch (error) { report.failed = Math.max(report.failed, 1); report.failure = { code: ['windows_required', 'packaged_app_shape_invalid', 'packaged_copy_digest_mismatch',
     'native_session_missing', 'native_evidence_missing', 'offline_native_order_mismatch', 'restart_native_session_changed', 'interactive_preview_qualification_missing', 'acceptance_phase_failed'].includes(error.message) ? error.message : 'acceptance_failed' }; }
   finally { report.elapsedMs = Date.now() - started; save(); }
   console.log(`HTML preview ${mode}: ${report.passed}/${report.passed + report.failed}; completed=${report.completed}; evidence=${resultFile}`);
-  console.log('Source/packaged are separate; external-resource success, pixel-code correctness and security acceptance are NOT qualified.');
+  console.log(`Functional completion=${report.functionalCompleted === true}; screenshot understanding=${report.screenshotUnderstandingVerified === true}; interactive qualification=${report.interactivePreviewQualified === true}. Security and external-resource success remain separate.`);
   return report.completed ? 0 : 1;
 }
 module.exports = { modeFor, packagedRoot, checkDriver, run, nativeSummary };
