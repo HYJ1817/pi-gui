@@ -28,6 +28,7 @@ import { safeFallbackFailure } from '../lib/model-fallback.js';
 import { createHtmlRenderBridge } from './html-render-bridge.js';
 import { projectHtmlArtifacts, projectHtmlToolResult } from './html-artifact-projection.js';
 import { htmlArtifactFromToolResult } from '../public/html-artifact-model.js';
+import { HTML_PREVIEW_TOOL } from '../public/html-preview-model.js';
 
 const fail = code => Object.assign(Error(code), { code });
 // This narrow surface projects tool activity. Raw args/result/worker diagnostics
@@ -47,7 +48,7 @@ function projectedMessage(msg) {
   if (msg.role === 'toolResult') {
     return { role: msg.role, toolCallId: validWireId(msg.toolCallId) ? msg.toolCallId : undefined,
       toolName: safeToolName(msg.toolName), isError: msg.isError === true, content: [],
-      ...(msg.toolName === 'html_render' ? projectHtmlToolResult(msg) : {}) };
+      ...(['html_render', HTML_PREVIEW_TOOL].includes(msg.toolName) ? projectHtmlToolResult(msg, msg.toolName) : {}) };
   }
   const out = { role: msg.role };
   if (msg.role !== 'assistant' && msg.role !== 'user') return out;
@@ -111,7 +112,10 @@ export function projectRuntimeEvent(event, activity = null) {
       ? projectPlanArgs(event.toolName, event.args)
       : event.type === 'tool_execution_end' ? projectPlanResult(event.result) : null;
     if (plan) out.plan = plan;
-    if (event.type === 'tool_execution_end' && event.isError !== true && htmlArtifactFromToolResult(event.result)) {
+    if (event.type === 'tool_execution_end' && (event.toolName === HTML_PREVIEW_TOOL
+      || event.result?.details?.kind === 'html_preview')) {
+      out.result = projectHtmlToolResult(event.isError === true ? { isError: true } : event.result, HTML_PREVIEW_TOOL);
+    } else if (event.type === 'tool_execution_end' && event.isError !== true && htmlArtifactFromToolResult(event.result)) {
       out.result = projectHtmlToolResult(event.result);
     }
     if (activity) out.activity = activity;
@@ -180,7 +184,7 @@ export function projectRuntimeEvent(event, activity = null) {
 export async function createSessionRuntime({ context, emit, piBin = 'pi', env = process.env, dataDir,
   guiPort = () => null, browser = null, processAdmission = () => true, readModelsConfig = () => null,
   sessionDir = null, extraArgs = [], supervisorFactory = createPiSupervisor, createChanges = null, mutationAdmission = null, toolScheduler = null, candidateAudit = null,
-  captureProviderLaunch = null, htmlArtifactStore = null, htmlPublication = null } = {}) {
+  captureProviderLaunch = null, htmlArtifactStore = null, htmlPublication = null, previewHtml = null, prepareHtml = null } = {}) {
   const runtime = createRuntime({ initialCwd: context.cwd });
   const launch = createPiLaunch({ piBin, env, getCwd: () => context.cwd });
   const entry = launch.cliEntry();
@@ -219,6 +223,7 @@ export async function createSessionRuntime({ context, emit, piBin = 'pi', env = 
     readState:()=>rpc.request({type:'get_state'},{timeoutMs:1000,strict:true}),capture:captureGuard,isCurrent:guardCurrent,
     canRevalidate:(previous,witness) => guardAdvance(previous,witness) && guardCurrent(witness),onEvent:emit,audit:candidateAudit}) : null;
   const htmlBridge = htmlArtifactStore ? createHtmlRenderBridge({ store: htmlArtifactStore, publication: htmlPublication,
+    preview: previewHtml, prepareHtml,
     launch, getCwd: () => context.cwd, capture: captureGuard, isCurrent: guardCurrent,
     scopeForWitness: witness => ({ kind: 'runtime', owner: { ...witness.owner, sessionId: witness.sessionId } }),
     canRevalidate: (previous, witness) => guardAdvance(previous, witness) && guardCurrent(witness),

@@ -15,7 +15,7 @@ function authorizeLive(env = process.env) {
   try { endpoint = new URL(env.PI_GUI_VISUAL_REPLIES_ENDPOINT); } catch { throw Error('invalid_explicit_endpoint'); }
   if (!['https:', 'http:'].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) throw Error('invalid_explicit_endpoint');
   if (!/^[a-zA-Z0-9._-]{1,160}$/.test(env.PI_GUI_VISUAL_REPLIES_PROVIDER)
-    || !/^[a-zA-Z0-9._:/-]{1,200}$/.test(env.PI_GUI_VISUAL_REPLIES_MODEL)
+    || !/^[a-zA-Z0-9._:/-]{1,190}(?:\[[a-zA-Z0-9_-]{1,8}\])?$/.test(env.PI_GUI_VISUAL_REPLIES_MODEL)
     || !/^[a-z][a-z0-9-]{1,80}$/.test(env.PI_GUI_VISUAL_REPLIES_API)) throw Error('invalid_explicit_selection');
   return { provider: env.PI_GUI_VISUAL_REPLIES_PROVIDER, model: env.PI_GUI_VISUAL_REPLIES_MODEL, api: env.PI_GUI_VISUAL_REPLIES_API,
     endpoint: endpoint.href, piBin: env.PI_GUI_VISUAL_REPLIES_PI_BIN, credentialVariable };

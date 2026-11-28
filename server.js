@@ -106,6 +106,8 @@ import { createRuntimeRoutes } from './server/runtime-routes.js';
 import { createSessionRuntime } from './server/session-runtime.js';
 import { createHtmlArtifactStore } from './server/html-artifact-store.js';
 import { createHtmlRenderBridge } from './server/html-render-bridge.js';
+import { createHtmlPreviewClient } from './server/html-preview-client.js';
+import { createHtmlResourcePreparer } from './server/html-resource-preparer.js';
 import { projectHtmlArtifacts, createHtmlArtifactProjection } from './server/html-artifact-projection.js';
 import { createHtmlArtifactHttp, createHtmlArtifactAuthority } from './server/html-artifact-http.js';
 import { createHtmlArtifactReconciler } from './server/html-artifact-sessions.js';
@@ -460,6 +462,13 @@ const classicHtmlProjection = createHtmlArtifactProjection();
 let classicHistoryRevision = 0;
 const executionTimelineStore = createExecutionTimelineStore({ dataDir: DATA_DIR });
 const htmlArtifactStore = createHtmlArtifactStore({ dataDir: DATA_DIR });
+// One private Electron channel serves every native Pi owner. Preview scheduling
+// belongs to Chromium, not to the ordinary-session admission policy.
+const htmlPreviewClient = createHtmlPreviewClient();
+const previewHtml = (input, options) => htmlPreviewClient.preview(input, options);
+// Both temporary inspection and immutable publication embed the same explicitly
+// declared public resources; generated pages never acquire a network capability.
+const prepareHtml = createHtmlResourcePreparer().prepare;
 // A dead v2 owner can be recovered only under the shared kernel gate. A live,
 // legacy/torn, or unknown owner stays unavailable; startup never steals it.
 void htmlArtifactStore.recoverLock().catch(error => {
@@ -577,6 +586,7 @@ const primaryToolGuard = createSessionToolBridge({scheduler:toolScheduler,launch
   onEvent:publishClassicExecution});
 const processAdmission = () => [...processManagers].reduce((n, manager) => n + manager.snapshot().activeCount, 0) <= 8;
 const htmlRenderBridge = createHtmlRenderBridge({ store: htmlArtifactStore, publication: htmlPublication,
+  preview: previewHtml, prepareHtml,
   launch: piLaunch, getCwd: () => runtime.getCurrentCwd(),
   readState: () => rpc.request({ type: 'get_state' }, { strict: true, timeoutMs: 1500 }),
   readEntries: () => rpc.request({ type: 'get_entries' }, { strict: true, timeoutMs: 1500 }),
@@ -1549,7 +1559,7 @@ const runtimeRegistry = runtimeRegistryRef = createRuntimeRegistry({
     let adapter;
     try { adapter = await createSessionRuntime({ context, emit, piBin: effectivePiBin, env: process.env, dataDir: DATA_DIR,
       guiPort: () => server.address()?.port, browser, processAdmission, readModelsConfig: providers.readModelsConfig, mutationAdmission, toolScheduler,
-      captureProviderLaunch, htmlArtifactStore, htmlPublication,
+      captureProviderLaunch, htmlArtifactStore, htmlPublication, previewHtml, prepareHtml,
       candidateAudit: context.workspace.branch?.startsWith('pi-gui/t4b/') ? event => candidateRunsRef?.audit(context.getOwner(),event) : null,
       createChanges: ({ launch, context, requestState }) => createSessionChangeBridge({ store: getEvidenceStore, launch,
         admission: mutationAdmission, inspectFileMetadata, inspectObjectEvidence:observeFileObject,
@@ -2081,6 +2091,7 @@ async function shutdown() {
   runtime.setShuttingDown(true);
   await htmlReconciler.dispose();
   await htmlRenderBridge.dispose();
+  htmlPreviewClient.dispose();
   /* Await cancellation and the job's staging cleanup before closing the process. */
   await environmentInstall.dispose();
   await terminal.dispose();

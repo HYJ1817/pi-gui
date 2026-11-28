@@ -17,16 +17,19 @@ jobs:
     name: Normal-sandbox Artifact security
     runs-on: windows-latest
     timeout-minutes: 15
-    env:
-      # Use the driver's existing os.tmpdir() interface, not a future custom
-      # evidence-root option. Each attempt owns a fresh parent directory.
-      TEMP: ${{ runner.temp }}/visual-replies-security-${{ github.run_id }}-${{ github.run_attempt }}
-      TMP: ${{ runner.temp }}/visual-replies-security-${{ github.run_id }}-${{ github.run_attempt }}
-      TMPDIR: ${{ runner.temp }}/visual-replies-security-${{ github.run_id }}-${{ github.run_attempt }}
+    # runner context is available at step level, not job-level env.
     steps:
       - name: Prepare fresh fixture evidence directory
         shell: pwsh
-        run: New-Item -ItemType Directory -Path "$env:TEMP" -ErrorAction Stop | Out-Null
+        env:
+          FIXTURE_TEMP: ${{ runner.temp }}/visual-replies-security-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          # Use the driver's existing os.tmpdir() interface. Each attempt owns
+          # a fresh directory, created before exporting it to later steps.
+          New-Item -ItemType Directory -Path "$env:FIXTURE_TEMP" -ErrorAction Stop | Out-Null
+          "TEMP=$env:FIXTURE_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:FIXTURE_TEMP" >> $env:GITHUB_ENV
+          "TMPDIR=$env:FIXTURE_TEMP" >> $env:GITHUB_ENV
 
       - name: Checkout
         uses: actions/checkout@v5

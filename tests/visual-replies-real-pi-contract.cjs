@@ -84,6 +84,7 @@ async function run(piBin) {
     await until(() => fs.existsSync(path.join(world, 'contract-result.json')));
     const result = JSON.parse(fs.readFileSync(path.join(world, 'contract-result.json'), 'utf8'));
     check('real-pi-tool-discovered', result.discovered);
+    check('real-pi-preview-tool-discovered', result.previewDiscovered);
     check('bundled-handler-real-context-success', result.ok && result.details?.ok && result.details?.artifact);
     const artifact = result.details.artifact, stored = await store.read(artifact.id), state = await rpc('get_state'), entries = await rpc('get_entries');
     check('private-bridge-verified-native-rpc', nativeReads >= 2 && state.sessionId === artifact.sessionId && artifact.sessionId === result.nativeSessionId);

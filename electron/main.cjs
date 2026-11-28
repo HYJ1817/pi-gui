@@ -95,12 +95,17 @@ const { desktopQualification } = require('./desktop-qualification.cjs');
  * 把「这条 URL 走哪条线路」和「代理线路上的 GET」交给这里。 */
 const { createMarketNetworkBridge } = require('./market-network.cjs');
 const { createHtmlArtifactSecurity } = require('./html-artifact-security.cjs');
+const { createHtmlPreviewService } = require('./html-preview-service.cjs');
 
 registerCredentialScheme(protocol);
 
 const PORT = Number(process.env.PORT || 7788);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const ROOT = path.resolve(__dirname, '..');
+const htmlPreviewService = createHtmlPreviewService({
+  BrowserWindow, session, root: app.isPackaged ? __dirname : ROOT,
+  hasSwitch: name => app.commandLine.hasSwitch(name),
+});
 
 /* 本进程与后端之间的共享令牌。
  *
@@ -301,6 +306,7 @@ async function ensureServer() {
   };
   server.stdout.on('data', collect);
   server.stderr.on('data', collect);
+  htmlPreviewService.attach(server);
   /* 只把桥挂在本实例直属的子进程上：reused backend 的消息不会到这里，
    * renderer 也拿不到这个通道。应答固定字段，代理地址与认证信息不出主进程。 */
   try {
@@ -328,6 +334,7 @@ async function ensureServer() {
       : { exitCode: Number.isFinite(code) ? code : undefined, signal: signal ? String(signal) : undefined, durationMs: serverStartedAt ? Date.now() - serverStartedAt : undefined });
     marketNetwork?.dispose();
     marketNetwork = null;
+    htmlPreviewService.detach(server);
     server = null;
     /* 后端已退出，迟到或旧的抓取结果不能留给下一次 killServer 使用。 */
     serverIdentity = null;
@@ -499,6 +506,7 @@ function killServer() {
     serverIdentity = null;
     return;
   }
+  htmlPreviewService.detach(server);
   const pid = server.pid;
   const identity = serverIdentity && serverIdentity.pid === pid ? serverIdentity.expected : null;
   /* Windows 必须先做 /T 树杀，再 kill 后端。
@@ -755,6 +763,8 @@ function hardenWebContents(wc) {
    * （远程只准 https、http 只准回环、不许去 Pi GUI 自己、不许开新窗口、权限全拒）。
    * 两套规则是**并列**的，不是一严一松 —— 别把这条判断删了当优化。 */
   if (isBrowserWebContents(wc)) return;
+  // Preview windows install their own navigation policy and never open shell links.
+  if (htmlPreviewService.ownsWebContents(wc)) return;
 
   /* 凭据受限输入窗使用独立 session：它永远不参与「站外链接交给系统浏览器」
    * 这一层（FIX-04）。导航与弹窗一律拒绝，且不会调用 shell.openExternal。
@@ -1028,6 +1038,7 @@ function finishQuit() {
   browserAgent?.stop();
   runtimeBrowserHost?.stop();
   credentialDesktop?.dispose();
+  htmlPreviewService.dispose();
   htmlArtifactSecurity?.dispose();
   desktopFonts?.dispose();
   killServer();
