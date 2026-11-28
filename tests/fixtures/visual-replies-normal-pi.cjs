@@ -2,7 +2,7 @@
 // OFFLINE fake Pi, deliberately labelled as such. Real bundled extensions and
 // private bridge execute, but every assistant/token/tool event here is synthetic.
 const fs = require('node:fs'), path = require('node:path');
-const { randomUUID } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const arg = name => { const i = process.argv.indexOf(name); return i < 0 ? null : process.argv[i + 1]; };
 const cwd = process.cwd(), dir = arg('--session-dir') || path.join(process.env.PI_CODING_AGENT_DIR, 'sessions', '--' + path.resolve(cwd).replace(/^[/\\]/, '').replace(/[/\\:]/g, '-') + '--');
@@ -16,7 +16,8 @@ function open(resume) {
   entries = fs.readFileSync(file, 'utf8').trim().split('\n').slice(1).map(JSON.parse); leafId = entries.at(-1)?.id ?? null;
 }
 open(arg('--session'));
-const ctx = { cwd, sessionManager: { getSessionId: () => native, getLeafId: () => leafId, getBranch: () => entries } };
+const ctx = { cwd, model: { input: ['text', 'image'] },
+  sessionManager: { getSessionId: () => native, getLeafId: () => leafId, getBranch: () => entries } };
 const send = value => process.stdout.write(JSON.stringify(value) + '\n');
 const response = (c, data = {}) => send({ type: 'response', id: c.id, command: c.type, success: true, data });
 const append = message => {
@@ -46,15 +47,35 @@ async function run(c) {
   const samples = JSON.parse(fs.readFileSync(process.env.VISUAL_REPLIES_SAMPLES, 'utf8'));
   const id = /sample:([a-z-]+)/.exec(c.message)?.[1];
   const chosen = id ? samples.filter(row => row.id === id) : samples;
-  for (const row of chosen) {
-    const call = randomUUID(), args = { title: row.title, html: row.html, height: row.height };
-    const msg = assistant([{ type: 'toolCall', id: call, name: 'html_render', arguments: args }], 'toolUse');
+  async function executeTool(name, args) {
+    const call = randomUUID(), tool = tools.get(name);
+    if (!tool) throw Error('fixture_tool_missing');
+    const msg = assistant([{ type: 'toolCall', id: call, name, arguments: args }], 'toolUse');
     append(msg); send({ type: 'message_start', message: msg }); send({ type: 'message_end', message: msg });
-    send({ type: 'tool_execution_start', toolName: 'html_render', toolCallId: call, args });
-    const result = await tools.get('html_render').execute(call, args, undefined, undefined, ctx);
-    append({ role: 'toolResult', toolCallId: call, toolName: 'html_render', ...result, timestamp: Date.now() });
-    send({ type: 'tool_execution_end', toolName: 'html_render', toolCallId: call, result, isError: result.isError === true });
-    if (result.isError) throw Error('fixture_publish_failed');
+    send({ type: 'tool_execution_start', toolName: name, toolCallId: call, args });
+    const result = await tool.execute(call, args, undefined, undefined, ctx);
+    const entry = append({ role: 'toolResult', toolCallId: call, toolName: name, ...result, timestamp: Date.now() });
+    send({ type: 'tool_execution_end', toolName: name, toolCallId: call, result, isError: result.isError === true });
+    if (name === 'html_preview' && !result.isError) {
+      let messages = [structuredClone(entry.message)];
+      for (const handler of hooks.get('context') || []) messages = (await handler({ messages }, ctx))?.messages ?? messages;
+      const image = messages[0]?.content?.find(part => part.type === 'image' && part.mimeType === 'image/png');
+      if (image) {
+        const bytes = Buffer.from(image.data, 'base64');
+        if (bytes.length >= 24 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+          const proof = { mode: result.details.mode, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'),
+            width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+          fs.appendFileSync(path.join(process.env.VISUAL_REPLIES_WORLD, 'evidence', `context-${native}.jsonl`), JSON.stringify(proof) + '\n');
+        }
+      }
+    }
+    if (result.isError && (name !== 'html_preview' || result.details?.code !== 'html_preview_unavailable'))
+      throw Error(name === 'html_render' ? 'fixture_publish_failed' : 'fixture_preview_failed');
+  }
+  for (const row of chosen) {
+    const args = { title: row.title, html: row.html, height: row.height };
+    if (row.preview === true) await executeTool('html_preview', { html: row.html, height: row.height });
+    await executeTool('html_render', args);
   }
   const text = 'OFFLINE_FIXTURE_FOLLOWUP：可视化之后的文字仍可继续。';
   const msg = assistant([{ type: 'text', text: '' }]);
@@ -65,7 +86,8 @@ async function run(c) {
     await new Promise(resolve => setTimeout(resolve, 80));
   }
   append(msg); send({ type: 'message_end', message: msg });
-  streaming = false; await notify('agent_settled'); send({ type: 'agent_end', messages: [] }); send({ type: 'agent_settled', aborted: false });
+  streaming = false; await notify('agent_end'); await notify('agent_settled');
+  send({ type: 'agent_end', messages: [] }); send({ type: 'agent_settled', aborted: false });
 }
 require('node:readline').createInterface({ input: process.stdin }).on('line', line => { void (async () => {
   await ready; const c = JSON.parse(line);

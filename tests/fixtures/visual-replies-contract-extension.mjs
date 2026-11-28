@@ -9,7 +9,10 @@ export default async function contract(pi) {
   const { installHtmlRender } = await import(pathToFileURL(process.env.VISUAL_REPLIES_BUNDLED_EXTENSION).href);
   const input = JSON.parse(fs.readFileSync(path.join(world, 'contract-input.json'), 'utf8'));
   let definition;
-  installHtmlRender({ on: (...args) => pi.on(...args), registerTool(tool) { definition = tool; pi.registerTool(tool); } }, {
+  installHtmlRender({ on: (...args) => pi.on(...args), registerTool(tool) {
+    if (tool.name === 'html_render') definition = tool;
+    pi.registerTool(tool);
+  } }, {
     url: process.env.PI_GUI_HTML_URL, token: process.env.PI_GUI_HTML_TOKEN,
   });
   pi.registerCommand('vr-contract-setup', {
@@ -27,8 +30,10 @@ export default async function contract(pi) {
   pi.registerCommand('vr-contract', {
     description: 'Execute registered bundled handler in fresh real context; no model',
     handler: async (_args, ctx) => {
-      const info = pi.getAllTools().find(tool => tool.name === 'html_render');
-      const report = { schemaVersion: 1, discovered: Boolean(info), parameters: Boolean(info?.parameters), modelCalls: 0,
+      const tools = pi.getAllTools();
+      const info = tools.find(tool => tool.name === 'html_render');
+      const report = { schemaVersion: 1, discovered: Boolean(info), previewDiscovered: tools.some(tool => tool.name === 'html_preview'),
+        parameters: Boolean(info?.parameters), modelCalls: 0,
         execution: 'registered-definition-in-real-extension-command-context', syntheticAssistantSetup: true };
       try {
         if (!info || !definition) throw Error('tool_not_registered');
