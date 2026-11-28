@@ -27,6 +27,10 @@ test('HTML artifact real server and guardian/RPC process integration', { timeout
   const pkg = path.join(world, 'node_modules/@earendil-works/pi-coding-agent');
   for (const dir of [data, home, ...projects, path.join(pkg, 'dist/core/extensions'), path.join(pkg, 'dist/cli'), path.join(world, 'tmp')]) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(data, 'projects.json'), JSON.stringify({ active: '', items: projects.map(project => ({ name: path.basename(project), path: project })) }));
+  // File capture is explicitly disabled below. Keep its optional store
+  // unavailable in this fixture so the artifact assertion cannot accidentally
+  // depend on Windows ACL support or a writable evidence directory.
+  fs.writeFileSync(path.join(data, 'revert-evidence'), 'capture-disabled-fixture');
   fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@earendil-works/pi-coding-agent', version: '1.6.0', bin: { pi: 'cli.cjs' } }));
   // Source capability excerpts match the 1.6 public API used by production
   // probes. Nested entries/parentId/leafId match SessionManager, not a fake
@@ -136,9 +140,40 @@ export type ExtensionHandler<E, R = undefined> = (event: E, ctx: ExtensionContex
     assert.notEqual(identities[0].pid, identities[1].pid); assert.notEqual(identities[0].guardianPid, identities[1].guardianPid);
     assert.notEqual(owners[0].sessionId, owners[1].sessionId);
   });
+  await t.test('unavailable capture fails closed until explicitly disabled, without creating a model turn', async () => {
+    for (let i = 0; i < ids.length; i++) {
+      const before = fs.readFileSync(identities[i].file, 'utf8');
+      const rejected = await rpc({ action: 'command', owner: owners[i], command: { type: 'prompt', message: 'must not reach Pi' } });
+      assert.equal(rejected.status, 409);
+      assert.equal(fs.readFileSync(identities[i].file, 'utf8'), before);
+      const evidence = await api('/api/session-change/evidence', undefined,
+        { headers: { 'x-pi-gui-token': token, 'x-pi-gui-conversation': ids[i] } });
+      assert.equal(evidence.body.ok, false);
+      assert.equal(evidence.body.reason, 'evidence_privacy_unavailable');
+      // Use the real user opt-out, never mock ACL success. Registry must not
+      // wait for agent_settled for a command that does not reach Pi at all.
+      const disabled = await rpc({ action: 'command', owner: owners[i], command: { type: 'prompt', message: '/gui-capture disable' } });
+      assert.equal(disabled.status, 200, `fixture ${i + 1} capture disable: ${disabled.body.code ?? 'no_code'}`);
+      assert.equal(disabled.body.ok, true);
+      assert.equal((await item(ids[i])).activity, 'idle');
+      assert.equal(fs.readFileSync(identities[i].file, 'utf8'), before);
+      assert.equal(fs.statSync(path.join(data, 'revert-evidence')).isFile(), true);
+    }
+  });
   await t.test('private extension publishes refs before native persistence; HTTP stays reference_pending', async () => {
     for (let i = 0; i < ids.length; i++) {
-      assert.equal((await rpc({ action: 'command', owner: owners[i], command: { type: 'prompt', message: 'publish fixture' } })).status, 200);
+      const prompt = await rpc({ action: 'command', owner: owners[i], command: { type: 'prompt', message: 'publish fixture' } });
+      let capture = 'not_checked';
+      if (prompt.status !== 200) {
+        // Both routes project closed reason codes. Never print response bodies,
+        // native errors, paths, tokens or the HTML when diagnosing admission.
+        try {
+          const evidence = await api('/api/session-change/evidence', undefined,
+            { headers: { 'x-pi-gui-token': token, 'x-pi-gui-conversation': ids[i] } });
+          capture = evidence.body.reason ?? evidence.body.code ?? 'no_code';
+        } catch { capture = 'diagnostic_unavailable'; }
+      }
+      assert.equal(prompt.status, 200, `fixture ${i + 1} prompt admission: ${prompt.body.code ?? 'no_code'}; capture: ${capture}`);
       const event = await until(async () => {
         const events = (await rpc({ action: 'events', owner: owners[i], cursor: 0 })).body;
         assert.ok(!JSON.stringify(events).includes('PROCESS_HTML_CANARY'));
