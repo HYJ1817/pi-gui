@@ -131,12 +131,20 @@ export function installHtmlRender(pi, connection) {
         const staticPreview = diagnostics.warnings.includes('page_javascript_disabled');
         const mode = staticPreview ? 'static' : 'interactive';
         const heading = staticPreview ? 'Static preview (page JavaScript disabled)' : 'Interactive preview';
-        const diagnosticsText = `${heading} ${width}×${height} CSS px. Content ${contentWidth}×${contentHeight} CSS px.\n${JSON.stringify(diagnostics)}`;
+        const limitation = staticPreview
+          ? 'Only authored static markup was measured. Scripts, Canvas drawing, dynamic DOM/SVG and runtime errors were NOT evaluated. Do not treat this screenshot as proof that interactive content works. Keep a useful static fallback; do not retry unchanged HTML to obtain JavaScript execution.'
+          : 'Page errors refer to the rendered document (including the shared bootstrap), not necessarily the original HTML line numbers.';
+        const diagnosticsText = `${heading} ${width}×${height} CSS px. Content ${contentWidth}×${contentHeight} CSS px.\n${limitation}\n${JSON.stringify(diagnostics)}`;
         return { content: [{ type: 'text', text: diagnosticsText }], details: { kind: 'html_preview', schemaVersion: 1,
           ok: true, mode, width, height, contentWidth, contentHeight, diagnosticCounts } };
       } catch (error) {
         const code = CODES.has(error?.code) ? error.code : 'html_preview_failed';
-        return { isError: true, content: [{ type: 'text', text: `HTML preview unavailable (${code}). Check the HTML directly and publish with html_render if useful.` }],
+        const cause = code === 'html_preview_timeout'
+          ? 'Preview service deadline exceeded; no completed screenshot is available.'
+          : code === 'html_preview_unavailable'
+            ? 'The host preview service or required isolation is unavailable; this is not a page JavaScript error.'
+            : 'The host could not complete this preview; no page-error conclusion can be drawn.';
+        return { isError: true, content: [{ type: 'text', text: `HTML preview unavailable (${code}). ${cause} Check the HTML directly and publish with html_render if useful.` }],
           details: { kind: 'html_preview', schemaVersion: 1, ok: false, code } };
       }
     },

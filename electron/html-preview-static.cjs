@@ -1,5 +1,9 @@
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
+const { resourceReadinessScript } = require(fs.existsSync(path.join(__dirname, 'html-preview-diagnostics.cjs'))
+  ? './html-preview-diagnostics.cjs' : '../lib/html-preview-diagnostics.cjs');
 const STATIC_WARNING = 'page_javascript_disabled';
 const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; object-src 'none'; base-uri 'none'; form-action 'none'";
 
@@ -83,7 +87,7 @@ async function renderStaticPreview(win, request, modules, limits, signal, litera
     const args = [request.html, modules.tokensCss, request.theme, modules.theme.HTML_ARTIFACT_THEME_TOKENS, CSP];
     const mount = `(${mountStaticPreview.toString()})(${args.map(literal).join(',')})`;
     if (!await evaluate(mount)) throw new Error('static_preview_layout_limit');
-    const measure = `(()=>{const b=document.body;const images=[...document.images];return {width:b.scrollWidth,height:Math.ceil(Math.max(b.scrollHeight,b.getBoundingClientRect().height)),ready:document.fonts.status==='loaded'&&images.every(img=>img.complete),missingImages:images.filter(img=>!img.naturalWidth).length}})()`;
+    const measure = resourceReadinessScript();
     const deadline = Date.now() + limits.imageFontWaitMs;
     let dimensions = await evaluate(measure);
     while (!dimensions.ready && Date.now() < deadline) {
@@ -94,13 +98,18 @@ async function renderStaticPreview(win, request, modules, limits, signal, litera
     await viewport(height);
     const { data } = await debuggerApi.sendCommand('Page.captureScreenshot', { format: 'png', fromSurface: true,
       captureBeyondViewport: true, clip: { x: 0, y: 0, width: request.width, height, scale: 1 } });
-    const warnings = [STATIC_WARNING];
+    const warnings = [STATIC_WARNING, 'native_network_isolation_unavailable', 'page_scripts_not_executed', 'dynamic_content_not_measured'];
+    const errors = [];
     if (!dimensions.ready) warnings.push('font_or_image_readiness_timeout');
-    if (dimensions.missingImages) warnings.push(`${Math.min(999, dimensions.missingImages)}_images_unavailable`);
+    if (dimensions.missingImages) {
+      warnings.push(`${Math.min(999, dimensions.missingImages)}_images_unavailable`);
+      errors.push({ code: 'image_decode_failed', type: 'image' });
+    }
+    if (dimensions.missingFonts) { warnings.push('fonts_unavailable'); errors.push({ code: 'font_load_failed', type: 'font' }); }
     if (dimensions.width > request.width) warnings.push('content_width_overflows_viewport');
     if (dimensions.height > height) warnings.push('content_height_capped');
     return { height, width: request.width, contentWidth: Math.min(1_000_000, dimensions.width),
-      contentHeight: Math.min(1_000_000, dimensions.height), warnings, data };
+      contentHeight: Math.min(1_000_000, dimensions.height), warnings, errors, data };
   } finally {
     try { if (debuggerApi.isAttached()) debuggerApi.detach(); } catch { /* Cancel may have destroyed the window. */ }
   }

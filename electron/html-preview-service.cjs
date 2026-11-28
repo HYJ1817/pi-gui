@@ -5,7 +5,10 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const { desktopQualification } = require('./desktop-qualification.cjs');
-const { renderStaticPreview, STATIC_WARNING } = require('./html-preview-static.cjs');
+const { renderStaticPreview } = require('./html-preview-static.cjs');
+const diagnosticsPath = fs.existsSync(path.join(__dirname, 'html-preview-diagnostics.cjs'))
+  ? './html-preview-diagnostics.cjs' : '../lib/html-preview-diagnostics.cjs';
+const { validDiagnostics, scriptDiagnostic, resourceReadinessScript } = require(diagnosticsPath);
 
 const CHANNEL = 'html-preview-request';
 const RESULT_CHANNEL = 'html-preview-result';
@@ -79,22 +82,7 @@ function isPreviewResult(value) {
     || !png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
     || png.toString('ascii', 12, 16) !== 'IHDR'
     || png.readUInt32BE(16) !== value.width || png.readUInt32BE(20) !== value.height) return false;
-  const diagnostics = value.diagnostics;
-  if (Object.keys(diagnostics).some(key => !['console', 'errors', 'resources', 'warnings'].includes(key))
-    || !['console', 'errors', 'resources', 'warnings'].every(key => Array.isArray(diagnostics[key])
-      && diagnostics[key].length <= LIMITS.diagnosticEntries)) return false;
-  if (diagnostics.console.some(item => !object(item) || Object.keys(item).some(key => !['level', 'text'].includes(key))
-    || !['log', 'info', 'warning', 'error'].includes(item.level) || item.text !== 'console_message')) return false;
-  if (diagnostics.errors.some(item => !object(item) || Object.keys(item).some(key => !['code', 'type', 'reason'].includes(key))
-    || !['resource_blocked', 'document_load_failed', 'resource_load_failed', 'render_process_gone', 'script_error'].includes(item.code)
-    || item.type !== undefined && !['mainFrame', 'subFrame', 'stylesheet', 'script', 'image', 'font', 'xhr', 'fetch', 'other'].includes(item.type)
-    || item.reason !== undefined && !['crashed', 'oom', 'killed', 'launch-failed', 'integrity-failure', 'gone'].includes(item.reason))) return false;
-  if (diagnostics.resources.some(item => !object(item) || Object.keys(item).some(key => !['type', 'outcome'].includes(key))
-    || !['mainFrame', 'subFrame', 'stylesheet', 'script', 'image', 'font', 'xhr', 'fetch', 'other'].includes(item.type)
-    || item.outcome !== 'blocked')) return false;
-  return diagnostics.warnings.every(item => typeof item === 'string' && item.length <= 80
-    && ['font_or_image_readiness_timeout', 'layout_feedback_limited', 'content_height_capped',
-      'content_width_overflows_viewport', STATIC_WARNING].includes(item) || typeof item === 'string' && /^\d{1,3}_images_unavailable$/.test(item));
+  return validDiagnostics(value.diagnostics);
 }
 
 function safeDiagnosticResources(session, resources, errors, staticOnly) {
@@ -348,11 +336,12 @@ async function renderInWindow(task, { BrowserWindow, session, root, hasSwitch, a
     win.webContents.on('will-redirect', event => event.preventDefault());
     win.webContents.on('will-prevent-unload', event => event.preventDefault());
     win.webContents.on('console-message', event => {
-      // Console text is renderer-controlled and can contain the complete HTML or
-      // private values. Keep only a bounded severity signal, never its payload.
+      // Only closed, generated descriptions enter private model feedback. Raw
+      // console arguments, source URLs and stacks never leave this listener.
       const level = normalizeConsoleLevel(event.level);
       addBounded(diagnostics.console, { level, text: 'console_message' }, LIMITS.consoleEntries);
-      if (level === 'error' && /^Uncaught\b/.test(event.message)) addBounded(diagnostics.errors, { code: 'script_error' });
+      const error = level === 'error' && scriptDiagnostic(event.message, event.lineNumber, event.sourceId);
+      if (error) addBounded(diagnostics.errors, error);
     });
     win.webContents.on('did-fail-load', (_event, errorCode) => {
       if (errorCode !== -3) addBounded(diagnostics.errors, { code: 'document_load_failed' });
@@ -372,9 +361,10 @@ async function renderInWindow(task, { BrowserWindow, session, root, hasSwitch, a
 
     await win.loadURL('about:blank');
     if (staticOnly) {
-      const { height, width, contentWidth, contentHeight, warnings, data } =
+      const { height, width, contentWidth, contentHeight, warnings, errors, data } =
         await renderStaticPreview(win, task.request, modules, LIMITS, task.signal, jsLiteral);
-      diagnostics.warnings.push(...warnings);
+      warnings.forEach(warning => addBounded(diagnostics.warnings, warning));
+      errors.forEach(error => addBounded(diagnostics.errors, error));
       return { schemaVersion: 1, ok: true, width, height, contentWidth, contentHeight,
         screenshot: { mimeType: 'image/png', data, width, height }, diagnostics };
     }
@@ -406,19 +396,27 @@ async function renderInWindow(task, { BrowserWindow, session, root, hasSwitch, a
     const frame = win.webContents.mainFrame?.framesInSubtree?.find(item =>
       item !== win.webContents.mainFrame && item.name === PREVIEW_FRAME_NAME && item.url === 'about:srcdoc');
     if (!frame || typeof frame.executeJavaScript !== 'function') throw new Error('preview_frame_unavailable');
-    const settleScript = `(()=>{const wait=async()=>{if(document.fonts?.ready)await document.fonts.ready;const images=[...document.images];const decoded=await Promise.all(images.map(async image=>{try{if(typeof image.decode==='function')await image.decode();else if(!image.complete)await new Promise(resolve=>{image.addEventListener('load',resolve,{once:true});image.addEventListener('error',resolve,{once:true})});return image.complete&&image.naturalWidth>0}catch{return false}}));return {imageCount:images.length,missingImages:decoded.filter(ok=>!ok).length}};return wait()})()`;
-    let readiness = { imageCount: 0, missingImages: 0 };
-    const readinessResult = await Promise.race([
-      frame.executeJavaScript(settleScript).catch(() => null),
-      delay(LIMITS.imageFontWaitMs).then(() => null),
-    ]);
-    if (readinessResult) readiness = readinessResult;
-    else addBounded(diagnostics.warnings, 'font_or_image_readiness_timeout');
-    if (readiness.missingImages > 0) addBounded(diagnostics.warnings, `${Math.min(999, readiness.missingImages)}_images_unavailable`);
+    const settleScript = resourceReadinessScript();
+    const readinessDeadline = Date.now() + LIMITS.imageFontWaitMs;
+    let readiness = await frame.executeJavaScript(settleScript);
+    while (!readiness.ready && Date.now() < readinessDeadline) {
+      throwIfAborted();
+      await delay(35);
+      readiness = await frame.executeJavaScript(settleScript);
+    }
+    if (!readiness.ready) addBounded(diagnostics.warnings, 'font_or_image_readiness_timeout');
+    if (readiness.missingImages > 0) {
+      addBounded(diagnostics.warnings, `${Math.min(999, readiness.missingImages)}_images_unavailable`);
+      addBounded(diagnostics.errors, { code: 'image_decode_failed', type: 'image' });
+    }
+    if (readiness.missingFonts > 0) {
+      addBounded(diagnostics.warnings, 'fonts_unavailable');
+      addBounded(diagnostics.errors, { code: 'font_load_failed', type: 'font' });
+    }
 
     const settleStart = Date.now();
     let appliedHeight = task.request.height;
-    let lastMessageCount = -1, quietSince = Date.now();
+    let lastMessageCount = -1, quietSince = Date.now(), layoutStable = false;
     while (Date.now() - settleStart < LIMITS.layoutSettleMs) {
       if (task.signal.aborted) throw Object.assign(new Error('cancelled'), { code: task.cancelCode || 'html_cancelled' });
       state = await win.webContents.executeJavaScript('window.__piGuiHtmlPreviewState||null');
@@ -430,10 +428,11 @@ async function renderInWindow(task, { BrowserWindow, session, root, hasSwitch, a
           quietSince = Date.now();
         }
         if (state.messages !== lastMessageCount) { lastMessageCount = state.messages; quietSince = Date.now(); }
-        if (Date.now() - quietSince >= 180 && targetHeight === appliedHeight) break;
+        if (Date.now() - quietSince >= 180 && targetHeight === appliedHeight) { layoutStable = true; break; }
       }
       await delay(35);
     }
+    if (!layoutStable) addBounded(diagnostics.warnings, 'layout_settle_timeout');
     state = await win.webContents.executeJavaScript('window.__piGuiHtmlPreviewState||null');
     if (!state?.resize) throw Object.assign(new Error('preview_layout_unavailable'), { code: 'html_preview_failed' });
     const contentWidth = Math.max(0, Math.min(1_000_000, Math.ceil(state.resize.naturalWidth)));
@@ -509,15 +508,16 @@ function createHtmlPreviewService({
   let active = null;
   let draining = false;
   let disposed = false;
-  let nativeRtcAvailable = false;
+  let nativeIsolationUnavailable = false;
 
   async function renderTask(task, options) {
     if (render) return render(task, options);
-    if (!nativeRtcAvailable) {
+    if (!nativeIsolationUnavailable) {
       try { return await renderInWindow(task, options); }
       catch (error) {
-        if (!staticFallback || task.signal.aborted || error?.message !== 'native_rtc_available') throw error;
-        nativeRtcAvailable = true;
+        if (!staticFallback || task.signal.aborted
+          || !['native_rtc_available', 'native_rtc_qualification_failed'].includes(error?.message)) throw error;
+        nativeIsolationUnavailable = true;
       }
     }
     return renderInWindow(task, { ...options, staticOnly: true });

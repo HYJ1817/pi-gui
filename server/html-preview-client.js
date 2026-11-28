@@ -1,3 +1,6 @@
+import previewDiagnostics from '../lib/html-preview-diagnostics.cjs';
+const { validDiagnostics } = previewDiagnostics;
+
 const REQUEST = 'html-preview-request';
 const RESULT = 'html-preview-result';
 const CANCEL = 'html-preview-cancel';
@@ -15,9 +18,6 @@ const LIMITS = Object.freeze({
   diagnostics: 20,
   clientTimeoutMs: 31_000,
 });
-const KNOWN_RESOURCE_TYPES = new Set([
-  'mainFrame', 'subFrame', 'stylesheet', 'script', 'image', 'font', 'xhr', 'fetch', 'other',
-]);
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const exactKeys = (value, keys) => object(value)
   && Object.keys(value).length === keys.length && Object.keys(value).every(key => keys.includes(key));
@@ -34,23 +34,6 @@ function normalizeInput(input) {
     || !Number.isInteger(height) || height < LIMITS.minHeight || height > LIMITS.maxHeight
     || !['light', 'dark'].includes(theme)) return null;
   return { html: input.html, width, height, theme };
-}
-
-function validDiagnostics(value) {
-  if (!exactKeys(value, ['console', 'errors', 'resources', 'warnings'])
-    || !['console', 'errors', 'resources', 'warnings'].every(key => Array.isArray(value[key])
-      && value[key].length <= LIMITS.diagnostics)) return false;
-  if (value.console.some(item => !exactKeys(item, ['level', 'text'])
-    || !['log', 'info', 'warning', 'error'].includes(item.level) || item.text !== 'console_message')) return false;
-  if (value.errors.some(item => !object(item) || Object.keys(item).some(key => !['code', 'type', 'reason'].includes(key))
-    || !['resource_blocked', 'document_load_failed', 'resource_load_failed', 'render_process_gone', 'script_error'].includes(item.code)
-    || item.type !== undefined && !KNOWN_RESOURCE_TYPES.has(item.type)
-    || item.reason !== undefined && !['crashed', 'oom', 'killed', 'launch-failed', 'integrity-failure', 'gone'].includes(item.reason))) return false;
-  if (value.resources.some(item => !exactKeys(item, ['type', 'outcome'])
-    || !KNOWN_RESOURCE_TYPES.has(item.type) || item.outcome !== 'blocked')) return false;
-  return value.warnings.every(item => typeof item === 'string' && item.length <= 80
-    && (['font_or_image_readiness_timeout', 'layout_feedback_limited', 'content_height_capped',
-      'content_width_overflows_viewport', 'page_javascript_disabled'].includes(item) || /^\d{1,3}_images_unavailable$/.test(item)));
 }
 
 function readResult(message) {
