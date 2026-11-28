@@ -31,6 +31,10 @@ test('HTML artifact real server and guardian/RPC process integration', { timeout
   // unavailable in this fixture so the artifact assertion cannot accidentally
   // depend on Windows ACL support or a writable evidence directory.
   fs.writeFileSync(path.join(data, 'revert-evidence'), 'capture-disabled-fixture');
+  // Opt-in failure probe: a real filesystem collision, not a permissions mock.
+  // This deliberately keeps the publication assertion red to verify diagnostics.
+  if (process.env.PI_GUI_HTML_PROCESS_FAULT === 'store-path')
+    fs.writeFileSync(path.join(data, 'html-artifacts'), 'unavailable-store-fixture');
   fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: '@earendil-works/pi-coding-agent', version: '1.6.0', bin: { pi: 'cli.cjs' } }));
   // Source capability excerpts match the 1.6 public API used by production
   // probes. Nested entries/parentId/leafId match SessionManager, not a fake
@@ -179,7 +183,12 @@ export type ExtensionHandler<E, R = undefined> = (event: E, ctx: ExtensionContex
         assert.ok(!JSON.stringify(events).includes('PROCESS_HTML_CANARY'));
         return events.events?.map(frame => frame.event).find(frame => frame?.type === 'tool_execution_end');
       }, 'tool_end');
-      assert.ok(event.result?.details?.artifact, 'production extension must publish a typed ref');
+      const outcome = fs.readFileSync(path.join(projects[i], 'fixture-html-outcome'), 'utf8');
+      const known = ['published', 'invalid_request', 'stale_runtime', 'html_bridge_unavailable', 'html_cancelled',
+        'html_immutable_conflict', 'html_storage_full', 'html_too_large', 'html_store_unavailable', 'unknown_error'];
+      assert.ok(event.result?.details?.artifact,
+        `production extension must publish a typed ref; extension: ${known.includes(outcome) ? outcome : 'unknown_error'}`);
+      assert.equal(outcome, 'published', 'fixture diagnostic agrees with the production result');
       refs.push(event.result.details.artifact);
       const pending = await artifactRead(refs[i].id, { conversationId: ids[i], owner: owners[i] });
       assert.equal(pending.status, 409); assert.equal(pending.body.code, 'reference_pending');

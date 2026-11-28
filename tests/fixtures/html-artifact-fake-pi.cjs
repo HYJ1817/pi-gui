@@ -53,6 +53,13 @@ async function run(c) {
   send({ type: 'tool_execution_start', toolName: 'html_render', toolCallId: 'reused-call', args });
   const result = await tools.get('html_render').execute('reused-call', args, own.controller.signal, undefined, ctx);
   if (active !== own) return;
+  // Runtime intentionally strips failed tool payloads. Preserve only a closed
+  // extension outcome in this TEMP fixture, never its result, HTML or content.
+  const codes = ['invalid_request', 'stale_runtime', 'html_bridge_unavailable', 'html_cancelled',
+    'html_immutable_conflict', 'html_storage_full', 'html_too_large', 'html_store_unavailable'];
+  const outcome = result.details?.ok === true && result.details?.artifact ? 'published'
+    : codes.includes(result.details?.code) ? result.details.code : 'unknown_error';
+  fs.writeFileSync(path.join(cwd, 'fixture-html-outcome'), outcome);
   send({ type: 'tool_execution_end', toolName: 'html_render', toolCallId: 'reused-call', result, isError: result.isError === true });
   // A real extension result can precede persistence: hold exactly that boundary.
   const deadline = Date.now() + 15000;
