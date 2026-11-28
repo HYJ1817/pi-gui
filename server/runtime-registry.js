@@ -18,6 +18,7 @@ const TURNS = new Set(['prompt', 'steer', 'follow_up']);
  * 其余命令都会改变历史、owner 或运行代次，一律 edit_in_progress。 */
 const EDIT_READ_ONLY = new Set(['get_state', 'get_messages', 'get_entries', 'get_tree', 'get_session_stats', 'get_available_models', 'get_available_thinking_levels', 'get_commands']);
 const EDIT_ALLOWED = new Set(['abort', 'extension_ui_response']);
+const isLocalCommand = cmd => cmd?.type === 'prompt' && typeof cmd.message === 'string' && cmd.message.trim() === '/gui-capture disable';
 const MAX_PENDING_TURNS = 32;
 const fail = code => Object.assign(Error(code), { code });
 const closed = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k => keys.includes(k));
@@ -611,7 +612,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     if ((live.editing || live.editTurn || live.editUnresolved) && !EDIT_READ_ONLY.has(cmd.type) && !EDIT_ALLOWED.has(cmd.type)) throw fail('edit_in_progress');
     if (TURNS.has(cmd.type) && live.activity === 'stopping') throw fail('stop_in_progress');
     if (cmd.type === 'prompt' && (live.agentActive || live.pendingTurns.size)) throw fail('runtime_busy');
-    if (TURNS.has(cmd.type)) {
+    if (TURNS.has(cmd.type) && !isLocalCommand(cmd)) {
       cmd = { ...cmd, id: typeof cmd.id === 'string' ? cmd.id : randomUUID() };
       if (live.pendingTurns.has(cmd.id)) throw fail('invalid_command');
       if (live.pendingTurns.size >= MAX_PENDING_TURNS) throw fail('runtime_request_limit');
@@ -624,7 +625,7 @@ export function createRuntimeRegistry({ dataDir, factory, resolveWorkspace, vali
     }
     try { await live.adapter.send(cmd); resolve(expected); if (cmd.type === 'extension_ui_response') live.approvals.delete(cmd.id); }
     catch (error) {
-      if (belongs(live) && TURNS.has(cmd.type)) {
+      if (belongs(live) && TURNS.has(cmd.type) && !isLocalCommand(cmd)) {
         live.pendingTurns.delete(cmd.id);
         if (!live.agentActive && !live.pendingTurns.size && live.activity !== 'stopping') live.activity = 'idle';
         changed(live);

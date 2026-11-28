@@ -79,6 +79,26 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
     adapters[0].emit({ type: 'agent_start', bridgeRun: 1 }); adapters[1].emit({ type: 'agent_start', bridgeRun: 1 });
     await registry.command(ao, { type: 'abort' });
     await check('Stop A 不停止 B，agent_end不代表idle', () => { assert.equal(adapters[0].commands.at(-1).type, 'abort'); assert.equal(adapters[1].commands.length, 1); adapters[1].emit({ type: 'agent_end', bridgeRun: 1 }); assert.equal(registry.snapshot().items.find(i => i.owner.workspaceId === 'B').activity, 'running'); });
+    await check('本地关闭仍拒绝缺失或过期 owner，也不越过其它会话的 busy 闸门', async () => {
+      const before = adapters.map(adapter => adapter.commands.length);
+      await reject(() => registry.command(null, { type: 'prompt', message: '/gui-capture disable' }), 'stale_runtime');
+      await reject(() => registry.command({ ...ao, runtimeGeneration: 'old' }, { type: 'prompt', message: '/gui-capture disable' }), 'stale_runtime');
+      await reject(() => registry.command(bo, { type: 'prompt', message: '/gui-capture disable' }), 'runtime_busy');
+      assert.deepEqual(adapters.map(adapter => adapter.commands.length), before);
+      assert.equal(registry.snapshot().items.find(i => i.owner.workspaceId === 'B').activity, 'running');
+    });
+    await registry.command(ao, { type: 'prompt', message: '/gui-capture disable' });
+    await check('Runtime 本地关闭命令不占用待完成轮次', () => {
+      assert.equal(adapters[0].commands.at(-1).message, '/gui-capture disable');
+      assert.equal(registry.snapshot().items.find(i => i.owner.workspaceId === 'A').activity, 'idle');
+    });
+    await registry.command(ao, { type: 'prompt', message: 'after local command' });
+    await check('本地关闭后下一条 prompt 不被 runtime_busy 错误拦截', () => {
+      assert.equal(adapters[0].commands.at(-1).message, 'after local command');
+      assert.equal(registry.snapshot().items.find(i => i.owner.workspaceId === 'A').activity, 'running');
+    });
+    await registry.command(ao, { type: 'abort' });
+    await check('本地关闭回归清理后的 Stop 仍可确认', () => assert.equal(registry.snapshot().items.find(i => i.owner.workspaceId === 'A').activity, 'idle'));
     await check('Runtime Stop 等待确认期间不放行新任务，旧 settled 不能误改状态', async () => {
       const adapter = adapters[0], original = adapter.abortAndWait;
       let releaseAbort;
@@ -94,6 +114,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
         assert.equal(activity(), 'stopping', '停止确认前，即使旧 settled 到达也不能标成 idle');
         const before = adapter.commands.length;
         await reject(() => registry.command(ao, { type: 'prompt', message: 'must remain blocked' }), 'stop_in_progress');
+        await reject(() => registry.command(ao, { type: 'prompt', message: '/gui-capture disable' }), 'stop_in_progress');
         assert.equal(adapter.commands.length, before, '未确认的新任务不得进入 Pi');
         assert.equal(registry.snapshot().items.find(i => i.owner?.workspaceId === 'B')?.activity, 'running',
           'A 停止不得影响 B');
@@ -186,6 +207,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
         for (const type of ['compact', 'set_session_name', 'prompt', 'steer', 'follow_up', 'set_model', 'cycle_model']) {
           await reject(() => registry.command(editOwner, { type, message: 'x', id: 'blocked-' + type }), 'edit_in_progress');
         }
+        await reject(() => registry.command(editOwner, { type: 'prompt', message: '/gui-capture disable' }), 'edit_in_progress');
         /* new_session / fork / switch_session 在 Runtime 通道本来就被白名单拒绝。 */
         for (const type of ['new_session', 'fork', 'switch_session']) {
           await reject(() => registry.command(editOwner, { type, sessionPath: '/tmp/other', id: 'blocked-' + type }), 'invalid_command');
